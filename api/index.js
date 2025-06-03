@@ -2,13 +2,22 @@
 import { verifyVnpayChecksum } from '../vnpay.js';
 import GHL from '../ghl.js';
 
-// Khởi tạo instance GHL
-const ghl = new GHL(process.env.GHL_TOKEN, process.env.ALT_ID);
+// Kiểm tra biến môi trường quan trọng trước khi khởi tạo GHL
+const GHL_ACCESS_TOKEN = process.env.GHL_ACCESS_TOKEN;
+const GHL_LOCATION_ID = process.env.GHL_LOCATION_ID;
 
-// Hàm tạo invoice trong GHL
+if (!GHL_ACCESS_TOKEN || !GHL_LOCATION_ID) {
+  console.error('Thiếu biến môi trường GHL_ACCESS_TOKEN hoặc GHL_LOCATION_ID');
+  // Có thể dừng server hoặc throw lỗi tùy trường hợp
+}
+
+const ghl = new GHL(GHL_ACCESS_TOKEN, GHL_LOCATION_ID);
+
+// Hàm tạo hóa đơn (invoice) trong GHL
 async function createInvoiceInGHL({ contactId, amount, description, payDate }) {
   try {
-    const response = await ghl.createIntegrationProvider({
+    // Giả định GHL có method createInvoice (bạn thay tên nếu khác)
+    const response = await ghl.createInvoice({
       contactId,
       amount,
       description,
@@ -21,10 +30,10 @@ async function createInvoiceInGHL({ contactId, amount, description, payDate }) {
   }
 }
 
-// Hàm cập nhật contact
+// Hàm cập nhật thông tin contact trong GHL
 async function updateGHLContact(contactId, updateData) {
   try {
-    if (!ghl.updateContact) {
+    if (typeof ghl.updateContact !== 'function') {
       throw new Error('GHL class chưa có method updateContact');
     }
     const response = await ghl.updateContact(contactId, updateData);
@@ -36,14 +45,23 @@ async function updateGHLContact(contactId, updateData) {
 }
 
 export default async function handler(req, res) {
-  if (req.method !== 'GET') {
-    return res.status(405).json({ error: 'Only GET method allowed for VNPAY IPN' });
+  // VNPAY IPN có thể là GET hoặc POST, bạn có thể tùy chỉnh theo thực tế
+  if (!['GET', 'POST'].includes(req.method)) {
+    return res.status(405).json({ error: 'Chỉ cho phép phương thức GET hoặc POST cho VNPAY IPN' });
   }
 
   try {
+    // IPN gửi dữ liệu có thể nằm ở req.query hoặc req.body tùy server
+    // Nếu bạn dùng GET thì req.query, POST có thể req.body
+    // Ở đây giả sử IPN dùng GET nên lấy req.query
     const vnpParams = { ...req.query };
 
     const secureHash = vnpParams.vnp_SecureHash;
+    if (!secureHash) {
+      return res.status(400).json({ error: 'Thiếu tham số vnp_SecureHash' });
+    }
+
+    // Xóa để không ảnh hưởng khi verify checksum
     delete vnpParams.vnp_SecureHash;
     delete vnpParams.vnp_SecureHashType;
 
@@ -60,26 +78,29 @@ export default async function handler(req, res) {
       vnp_PayDate,
     } = vnpParams;
 
+    // Nếu giao dịch không thành công, không làm gì thêm
     if (vnp_ResponseCode !== '00') {
-      return res.status(200).json({ message: 'Giao dịch không thành công. Không gửi vào GHL.' });
+      return res.status(200).json({ message: 'Giao dịch không thành công. Không cập nhật vào GHL.' });
     }
 
-    const customerId = vnp_OrderInfo;
+    const customerId = vnp_OrderInfo; // Lấy customerId từ OrderInfo (cần bạn kiểm tra đúng logic)
 
+    // Tạo invoice trong GHL
     await createInvoiceInGHL({
       contactId: customerId,
-      amount: parseInt(vnp_Amount, 10) / 100,
+      amount: parseInt(vnp_Amount, 10) / 100, // VNPAY gửi tiền tính bằng VND * 100
       description: `Thanh toán đơn hàng #${vnp_TxnRef}`,
       payDate: vnp_PayDate,
     });
 
+    // Cập nhật contact với tag
     await updateGHLContact(customerId, {
       tags: ['Đã thanh toán VNPAY'],
     });
 
     return res.status(200).json({ message: 'Đã xử lý VNPAY IPN và cập nhật vào GHL' });
   } catch (error) {
-    console.error('Webhook Error:', error);
+    console.error('Lỗi xử lý webhook:', error);
     return res.status(500).json({ error: 'Lỗi xử lý webhook' });
   }
 }
