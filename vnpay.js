@@ -1,8 +1,6 @@
-// vnpay.js
 import crypto from 'crypto';
 import qs from 'qs';
 
-// Cấu hình VNPAY lấy từ biến môi trường
 const vnpayConfig = {
   vnp_Version: '2.1.0',
   vnp_Command: 'pay',
@@ -14,78 +12,67 @@ const vnpayConfig = {
   vnp_Locale: 'vn',
 };
 
-// Sắp xếp các key object theo thứ tự alphabet để tạo chữ ký chính xác
+// Sắp xếp object theo key A-Z (bắt buộc khi tạo chữ ký)
 function sortObject(obj) {
-  const sorted = {};
-  const keys = Object.keys(obj).sort();
-  keys.forEach((key) => {
-    sorted[key] = obj[key];
-  });
-  return sorted;
+  return Object.keys(obj)
+    .sort()
+    .reduce((acc, key) => {
+      acc[key] = obj[key];
+      return acc;
+    }, {});
 }
 
-// Tạo URL thanh toán VNPAY
-function generatePaymentUrl({ amount, orderId, orderInfo, ipAddr }) {
-  const createDate = new Date().toISOString().replace(/[-T:Z.]/g, '').slice(0, 14);
+// Tạo URL thanh toán
+function generatePaymentUrl({ amount, bankCode = '', orderInfo, orderType = 'other', locale = 'vn', ipAddr }) {
+  const date = new Date();
+  const createDate = date.toISOString().replace(/[-T:Z.]/g, '').slice(0, 14);
+  const orderId = date.toTimeString().slice(0, 8).replace(/:/g, ''); // HHmmss
 
   const vnp_Params = {
     vnp_Version: vnpayConfig.vnp_Version,
     vnp_Command: vnpayConfig.vnp_Command,
     vnp_TmnCode: vnpayConfig.vnp_TmnCode,
-    vnp_Locale: vnpayConfig.vnp_Locale,
+    vnp_Locale: locale || 'vn',
     vnp_CurrCode: vnpayConfig.vnp_CurrCode,
-    vnp_TxnRef: orderId.toString(),
+    vnp_TxnRef: orderId,
     vnp_OrderInfo: orderInfo,
-    vnp_OrderType: 'other',
-    vnp_Amount: amount * 100, // VNPAY yêu cầu đơn vị là đồng * 100
+    vnp_OrderType: orderType,
+    vnp_Amount: amount * 100,
     vnp_ReturnUrl: vnpayConfig.vnp_ReturnUrl,
     vnp_IpAddr: ipAddr,
     vnp_CreateDate: createDate,
   };
+
+  if (bankCode) {
+    vnp_Params['vnp_BankCode'] = bankCode;
+  }
 
   const sortedParams = sortObject(vnp_Params);
   const signData = qs.stringify(sortedParams, { encode: false });
   const hmac = crypto.createHmac('sha512', vnpayConfig.vnp_HashSecret);
   const secureHash = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
 
-  // Gắn secureHash vào tham số
   sortedParams.vnp_SecureHash = secureHash;
 
-  // Tạo URL đầy đủ
-  return `${vnpayConfig.vnp_Url}?${qs.stringify(sortedParams, { encode: false })}`;
+  const paymentUrl = `${vnpayConfig.vnp_Url}?${qs.stringify(sortedParams, { encode: false })}`;
+  return paymentUrl;
 }
 
-// Xác minh checksum khi nhận IPN từ VNPAY
-function verifyIpnQuery(query) {
-  const vnp_Params = { ...query };
-  const receivedHash = vnp_Params.vnp_SecureHash;
-
-  // Bỏ các trường không tham gia ký
-  delete vnp_Params.vnp_SecureHash;
-  delete vnp_Params.vnp_SecureHashType;
-
-  const sortedParams = sortObject(vnp_Params);
+// Xác minh checksum từ IPN hoặc return (GET)
+function verifyVnpResponse(queryParams) {
+  const { vnp_SecureHash, vnp_SecureHashType, ...restParams } = queryParams;
+  const sortedParams = sortObject(restParams);
   const signData = qs.stringify(sortedParams, { encode: false });
+
   const hmac = crypto.createHmac('sha512', vnpayConfig.vnp_HashSecret);
-  const calculatedHash = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
+  const hash = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
 
-  return receivedHash === calculatedHash;
-}
-
-// Alias tiện dụng để xác minh checksum
-function verifyVnpayChecksum(params, receivedSecureHash) {
-  const sortedParams = sortObject(params);
-  const signData = qs.stringify(sortedParams, { encode: false });
-  const hmac = crypto.createHmac('sha512', vnpayConfig.vnp_HashSecret);
-  const calculatedHash = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
-
-  return calculatedHash === receivedSecureHash;
+  return hash === vnp_SecureHash;
 }
 
 export {
   vnpayConfig,
   generatePaymentUrl,
-  verifyIpnQuery,
-  verifyVnpayChecksum,
+  verifyVnpResponse,
   sortObject,
 };
