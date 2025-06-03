@@ -31,7 +31,6 @@ function generatePaymentUrl({ amount, bankCode = '', orderInfo, orderType = 'oth
   const createDate = date.toISOString().replace(/[-T:Z.]/g, '').slice(0, 14);
   const txnRef = date.toTimeString().slice(0, 8).replace(/:/g, '');
 
-  // ✅ Encode ReturnUrl trước khi ký
   const vnp_Params = {
     vnp_Version: vnpayConfig.vnp_Version,
     vnp_Command: vnpayConfig.vnp_Command,
@@ -42,7 +41,7 @@ function generatePaymentUrl({ amount, bankCode = '', orderInfo, orderType = 'oth
     vnp_OrderInfo: orderInfo,
     vnp_OrderType: orderType,
     vnp_Amount: amount * 100,
-    vnp_ReturnUrl: encodeURIComponent(vnpayConfig.vnp_ReturnUrl), // ✅ Sửa chỗ này
+    vnp_ReturnUrl: encodeURIComponent(vnpayConfig.vnp_ReturnUrl), // ✅ encode khi tạo URL
     vnp_IpAddr: ipAddr,
     vnp_CreateDate: createDate,
   };
@@ -70,6 +69,11 @@ function generatePaymentUrl({ amount, bankCode = '', orderInfo, orderType = 'oth
 function verifyVnpResponse(queryParams) {
   const vnpayConfig = getVnpConfig();
   const { vnp_SecureHash, vnp_SecureHashType, ...rest } = queryParams;
+
+  // ✅ Giải mã URL encode (nếu có) để đảm bảo hash khớp
+  if (rest.vnp_ReturnUrl) {
+    rest.vnp_ReturnUrl = decodeURIComponent(rest.vnp_ReturnUrl);
+  }
 
   const sortedParams = sortObject(rest);
   const signData = qs.stringify(sortedParams, { encode: false });
