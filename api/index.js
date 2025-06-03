@@ -1,3 +1,4 @@
+// index.js
 import { verifyVnpResponse } from '../vnpay.js';
 import GHL from '../ghl.js';
 
@@ -8,8 +9,12 @@ const ghl = new GHL(GHL_ACCESS_TOKEN, GHL_LOCATION_ID);
 
 async function createInvoiceInGHL({ contactId, amount, description, payDate }) {
   try {
+    if (!contactId || typeof contactId !== 'string') {
+      throw new Error('contactId không hợp lệ');
+    }
+
     const response = await ghl.createInvoice({
-      contactId,
+      contactId: String(contactId),
       amount,
       description,
       payDate,
@@ -42,7 +47,6 @@ export default async function handler(req, res) {
   try {
     const { vnp_SecureHash, vnp_SecureHashType, ...vnpParams } = req.query;
 
-    // ✅ Log debug đầy đủ
     console.log('📥 req.query:', req.query);
     console.log('🔐 vnp_SecureHash:', vnp_SecureHash);
 
@@ -73,11 +77,10 @@ export default async function handler(req, res) {
     const customerId = vnp_OrderInfo;
     const amount = parseInt(vnp_Amount, 10) / 100;
 
-    // ✅ Log dữ liệu invoice
     console.log('🧾 Tạo invoice với:', { customerId, amount, vnp_TxnRef, vnp_PayDate });
 
     await createInvoiceInGHL({
-      contactId: customerId,
+      contactId: String(customerId),
       amount,
       description: `Thanh toán đơn hàng #${vnp_TxnRef}`,
       payDate: vnp_PayDate,
@@ -88,7 +91,6 @@ export default async function handler(req, res) {
     });
 
     return res.status(200).json({ message: '✅ Đã xử lý VNPAY IPN thành công' });
-
   } catch (error) {
     console.error('❌ Lỗi xử lý webhook chi tiết:', {
       message: error.message,
