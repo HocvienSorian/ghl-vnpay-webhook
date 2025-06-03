@@ -21,7 +21,7 @@ async function createInvoiceInGHL({ contactId, amount, description, payDate }) {
     });
     return response.data;
   } catch (error) {
-    console.error('Lỗi tạo invoice trong GHL:', error.response?.data || error.message);
+    console.error('❌ Lỗi tạo invoice trong GHL:', error.response?.data || error.message);
     throw error;
   }
 }
@@ -34,28 +34,30 @@ async function updateGHLContact(contactId, updateData) {
     const response = await ghl.updateContact(contactId, updateData);
     return response.data;
   } catch (error) {
-    console.error('Lỗi cập nhật contact:', error.response?.data || error.message);
+    console.error('❌ Lỗi cập nhật contact:', error.response?.data || error.message);
     throw error;
   }
 }
 
 export default async function handler(req, res) {
   if (!['GET', 'POST'].includes(req.method)) {
-    return res.status(405).json({ error: 'Chỉ cho phép phương thức GET hoặc POST cho VNPAY IPN' });
+    return res.status(405).json({ error: 'Chỉ hỗ trợ phương thức GET hoặc POST' });
   }
 
   try {
-    const vnpParams = { ...req.query };
+    const { vnp_SecureHash, vnp_SecureHashType, ...vnpParams } = req.query;
 
-    const secureHash = vnpParams.vnp_SecureHash;
-    if (!secureHash) {
+    if (!vnp_SecureHash) {
       return res.status(400).json({ error: 'Thiếu tham số vnp_SecureHash' });
     }
 
-    delete vnpParams.vnp_SecureHash;
-    delete vnpParams.vnp_SecureHashType;
+    // ✅ Log debug nếu cần
+    console.log('👉 Params từ VNPAY:', vnpParams);
+    console.log('🔐 Received SecureHash:', vnp_SecureHash);
 
-    const isValid = verifyVnpResponse(vnpParams, secureHash);
+    // ✅ Truyền cả secureHash để kiểm tra
+    const isValid = verifyVnpResponse({ ...vnpParams, vnp_SecureHash });
+
     if (!isValid) {
       return res.status(400).json({ error: 'Checksum không hợp lệ' });
     }
@@ -85,9 +87,9 @@ export default async function handler(req, res) {
       tags: ['Đã thanh toán VNPAY'],
     });
 
-    return res.status(200).json({ message: 'Đã xử lý VNPAY IPN và cập nhật vào GHL' });
+    return res.status(200).json({ message: '✅ Đã xử lý VNPAY IPN và cập nhật vào GHL' });
   } catch (error) {
-    console.error('Lỗi xử lý webhook:', error);
+    console.error('❌ Lỗi xử lý webhook:', error);
     return res.status(500).json({ error: 'Lỗi xử lý webhook' });
   }
 }
