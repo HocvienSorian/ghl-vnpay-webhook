@@ -1,6 +1,8 @@
+// vnpay.js
 import crypto from 'crypto';
 import qs from 'qs';
 
+// Cấu hình VNPAY lấy từ biến môi trường
 const vnpayConfig = {
   vnp_Version: '2.1.0',
   vnp_Command: 'pay',
@@ -12,7 +14,7 @@ const vnpayConfig = {
   vnp_Locale: 'vn',
 };
 
-// Sắp xếp object theo thứ tự A-Z key để ký chính xác
+// Sắp xếp các key object theo thứ tự alphabet để tạo chữ ký chính xác
 function sortObject(obj) {
   const sorted = {};
   const keys = Object.keys(obj).sort();
@@ -35,7 +37,7 @@ function generatePaymentUrl({ amount, orderId, orderInfo, ipAddr }) {
     vnp_TxnRef: orderId.toString(),
     vnp_OrderInfo: orderInfo,
     vnp_OrderType: 'other',
-    vnp_Amount: amount * 100,
+    vnp_Amount: amount * 100, // VNPAY yêu cầu đơn vị là đồng * 100
     vnp_ReturnUrl: vnpayConfig.vnp_ReturnUrl,
     vnp_IpAddr: ipAddr,
     vnp_CreateDate: createDate,
@@ -46,35 +48,38 @@ function generatePaymentUrl({ amount, orderId, orderInfo, ipAddr }) {
   const hmac = crypto.createHmac('sha512', vnpayConfig.vnp_HashSecret);
   const secureHash = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
 
+  // Gắn secureHash vào tham số
   sortedParams.vnp_SecureHash = secureHash;
 
+  // Tạo URL đầy đủ
   return `${vnpayConfig.vnp_Url}?${qs.stringify(sortedParams, { encode: false })}`;
 }
 
-// Xác minh checksum trong IPN từ VNPAY
+// Xác minh checksum khi nhận IPN từ VNPAY
 function verifyIpnQuery(query) {
   const vnp_Params = { ...query };
-  const secureHash = vnp_Params.vnp_SecureHash;
+  const receivedHash = vnp_Params.vnp_SecureHash;
+
+  // Bỏ các trường không tham gia ký
   delete vnp_Params.vnp_SecureHash;
   delete vnp_Params.vnp_SecureHashType;
 
   const sortedParams = sortObject(vnp_Params);
   const signData = qs.stringify(sortedParams, { encode: false });
   const hmac = crypto.createHmac('sha512', vnpayConfig.vnp_HashSecret);
-  const checkHash = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
+  const calculatedHash = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
 
-  return secureHash === checkHash;
+  return receivedHash === calculatedHash;
 }
 
-// Hàm xác minh checksum rút gọn cho IPN (alias)
+// Alias tiện dụng để xác minh checksum
 function verifyVnpayChecksum(params, receivedSecureHash) {
-  const vnp_Params = { ...params };
-  const sortedParams = sortObject(vnp_Params);
+  const sortedParams = sortObject(params);
   const signData = qs.stringify(sortedParams, { encode: false });
   const hmac = crypto.createHmac('sha512', vnpayConfig.vnp_HashSecret);
-  const secureHash = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
+  const calculatedHash = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
 
-  return secureHash === receivedSecureHash;
+  return calculatedHash === receivedSecureHash;
 }
 
 export {
