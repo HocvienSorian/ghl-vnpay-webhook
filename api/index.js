@@ -1,13 +1,13 @@
-const GHL = require('../ghl.js');
-const { verifyVnpayChecksum } = require('../vnpay.js');
+// File: /api/index.js
+import { verifyVnpayChecksum } from '../vnpay.js';
+import GHL from '../ghl.js';
 
-// Khởi tạo instance GHL từ biến môi trường
+// Khởi tạo instance GHL
 const ghl = new GHL(process.env.GHL_TOKEN, process.env.ALT_ID);
 
 // Hàm tạo invoice trong GHL
 async function createInvoiceInGHL({ contactId, amount, description, payDate }) {
   try {
-    // Giả sử tạo order (invoice) qua API GHL
     const response = await ghl.createIntegrationProvider({
       contactId,
       amount,
@@ -21,24 +21,21 @@ async function createInvoiceInGHL({ contactId, amount, description, payDate }) {
   }
 }
 
-// Hàm cập nhật contact, thêm tag
+// Hàm cập nhật contact
 async function updateGHLContact(contactId, updateData) {
   try {
-    // Ví dụ gọi API update contact (bạn cần viết API tương ứng trong class GHL)
-    // Giả sử có method updateContact trong class GHL, nếu chưa có bạn cần tự thêm
     if (!ghl.updateContact) {
-      throw new Error('Method updateContact chưa được cài đặt trong GHL class');
+      throw new Error('GHL class chưa có method updateContact');
     }
-
     const response = await ghl.updateContact(contactId, updateData);
     return response.data;
   } catch (error) {
-    console.error('Lỗi cập nhật contact trong GHL:', error.response?.data || error.message);
+    console.error('Lỗi cập nhật contact:', error.response?.data || error.message);
     throw error;
   }
 }
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Only GET method allowed for VNPAY IPN' });
   }
@@ -50,7 +47,6 @@ module.exports = async function handler(req, res) {
     delete vnpParams.vnp_SecureHash;
     delete vnpParams.vnp_SecureHashType;
 
-    // Verify checksum
     const isValid = verifyVnpayChecksum(vnpParams, secureHash);
     if (!isValid) {
       return res.status(400).json({ error: 'Checksum không hợp lệ' });
@@ -70,7 +66,6 @@ module.exports = async function handler(req, res) {
 
     const customerId = vnp_OrderInfo;
 
-    // Tạo hóa đơn
     await createInvoiceInGHL({
       contactId: customerId,
       amount: parseInt(vnp_Amount, 10) / 100,
@@ -78,7 +73,6 @@ module.exports = async function handler(req, res) {
       payDate: vnp_PayDate,
     });
 
-    // Cập nhật tag contact
     await updateGHLContact(customerId, {
       tags: ['Đã thanh toán VNPAY'],
     });
@@ -88,4 +82,4 @@ module.exports = async function handler(req, res) {
     console.error('Webhook Error:', error);
     return res.status(500).json({ error: 'Lỗi xử lý webhook' });
   }
-};
+}
