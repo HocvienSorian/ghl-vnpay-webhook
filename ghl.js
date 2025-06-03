@@ -1,4 +1,4 @@
-// ghl.js
+// File: ghl.js
 import axios from 'axios';
 
 const GHL_API_BASE = 'https://services.leadconnectorhq.com/payments';
@@ -23,7 +23,7 @@ class GHL {
   }
 
   // ✅ Tạo invoice chi tiết theo chuẩn GHL
-  async createInvoice({ contactId, amount, description }) {
+  async createInvoice({ contactId, amount, description, payDate }) {
     const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
 
     const payload = {
@@ -58,6 +58,7 @@ class GHL {
     return axios.put(url, updateData, { headers: this.headers });
   }
 
+  // Các hàm khác (giữ nguyên)
   async createIntegrationProvider(data) {
     const url = `${GHL_API_BASE}/integrations/provider/whitelabel`;
     const payload = {
