@@ -1,18 +1,6 @@
 import crypto from 'crypto';
 import qs from 'qs';
 
-const vnpayConfig = {
-  vnp_Version: '2.1.0',
-  vnp_Command: 'pay',
-  vnp_TmnCode: process.env.VNP_TMNCODE,
-  vnp_HashSecret: process.env.VNP_HASHSECRET,
-  vnp_Url: process.env.VNP_URL,
-  vnp_ReturnUrl: process.env.VNP_RETURNURL,
-  vnp_CurrCode: 'VND',
-  vnp_Locale: 'vn',
-};
-
-// Sắp xếp object theo key A-Z (bắt buộc khi tạo chữ ký)
 function sortObject(obj) {
   return Object.keys(obj)
     .sort()
@@ -22,8 +10,23 @@ function sortObject(obj) {
     }, {});
 }
 
-// Tạo URL thanh toán
+// ✅ Moved config creation into function
+function getVnpConfig() {
+  return {
+    vnp_Version: '2.1.0',
+    vnp_Command: 'pay',
+    vnp_TmnCode: process.env.VNP_TMNCODE,
+    vnp_HashSecret: process.env.VNP_HASHSECRET,
+    vnp_Url: process.env.VNP_URL,
+    vnp_ReturnUrl: process.env.VNP_RETURNURL,
+    vnp_CurrCode: 'VND',
+    vnp_Locale: 'vn',
+  };
+}
+
 function generatePaymentUrl({ amount, bankCode = '', orderInfo, orderType = 'other', locale = 'vn', ipAddr }) {
+  const vnpayConfig = getVnpConfig();
+
   const date = new Date();
   const createDate = date.toISOString().replace(/[-T:Z.]/g, '').slice(0, 14);
   const orderId = date.toTimeString().slice(0, 8).replace(/:/g, ''); // HHmmss
@@ -54,12 +57,11 @@ function generatePaymentUrl({ amount, bankCode = '', orderInfo, orderType = 'oth
 
   sortedParams.vnp_SecureHash = secureHash;
 
-  const paymentUrl = `${vnpayConfig.vnp_Url}?${qs.stringify(sortedParams, { encode: false })}`;
-  return paymentUrl;
+  return `${vnpayConfig.vnp_Url}?${qs.stringify(sortedParams, { encode: false })}`;
 }
 
-// Xác minh checksum từ IPN hoặc return (GET)
 function verifyVnpResponse(queryParams) {
+  const vnpayConfig = getVnpConfig();
   const { vnp_SecureHash, vnp_SecureHashType, ...restParams } = queryParams;
   const sortedParams = sortObject(restParams);
   const signData = qs.stringify(sortedParams, { encode: false });
@@ -71,7 +73,6 @@ function verifyVnpResponse(queryParams) {
 }
 
 export {
-  vnpayConfig,
   generatePaymentUrl,
   verifyVnpResponse,
   sortObject,
