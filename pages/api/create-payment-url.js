@@ -1,4 +1,4 @@
-import { generatePaymentUrl } from '../vnpay.js';
+import { generatePaymentUrl } from '../../vnpay.js';
 
 export default function handler(req, res) {
   if (req.method !== 'POST') {
