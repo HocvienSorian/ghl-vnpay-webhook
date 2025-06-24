@@ -1,67 +1,48 @@
-// pages/custom-page.js
-import { useState } from 'react';
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <title>Cấu hình GHL Payment Provider</title>
+  <style>
+    body { font-family: sans-serif; max-width: 600px; margin: 40px auto; }
+    input, button { display: block; width: 100%; margin: 12px 0; padding: 8px; }
+  </style>
+</head>
+<body>
+  <h1>Cấu hình GHL Payment Provider</h1>
+  <form id="config-form">
+    <input name="locationId" placeholder="Location ID" required />
+    <input name="liveApiKey" placeholder="Live API Key" required />
+    <input name="livePublishableKey" placeholder="Live Publishable Key" required />
+    <input name="testApiKey" placeholder="Test API Key" required />
+    <input name="testPublishableKey" placeholder="Test Publishable Key" required />
+    <button type="submit">Gửi cấu hình</button>
+  </form>
+  <p id="status"></p>
 
-export default function CustomPaymentConfigPage() {
-  const [form, setForm] = useState({
-    locationId: '',
-    liveApiKey: '',
-    livePublishableKey: '',
-    testApiKey: '',
-    testPublishableKey: '',
-  });
+  <script>
+    document.getElementById('config-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const form = e.target;
+      const data = {
+        locationId: form.locationId.value,
+        liveApiKey: form.liveApiKey.value,
+        livePublishableKey: form.livePublishableKey.value,
+        testApiKey: form.testApiKey.value,
+        testPublishableKey: form.testPublishableKey.value,
+      };
 
-  const [status, setStatus] = useState(null);
-
-  const handleChange = (e) => {
-    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setStatus('⏳ Đang gửi...');
-
-    try {
-      const response = await fetch('/api/setup-config', {
+      const res = await fetch('/api/setup-config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify(data)
       });
 
-      const data = await response.json();
-
-      if (response.ok) {
-        setStatus('✅ Cấu hình thành công!');
-      } else {
-        setStatus(`❌ Lỗi: ${data.error}`);
-      }
-    } catch (err) {
-      console.error(err);
-      setStatus('❌ Lỗi không xác định.');
-    }
-  };
-
-  return (
-    <div style={{ maxWidth: 600, margin: '40px auto', padding: 20 }}>
-      <h1>Cấu hình GHL Payment Provider</h1>
-      <form onSubmit={handleSubmit}>
-        {['locationId', 'liveApiKey', 'livePublishableKey', 'testApiKey', 'testPublishableKey'].map((field) => (
-          <div key={field} style={{ marginBottom: 10 }}>
-            <label>{field}</label>
-            <input
-              type="text"
-              name={field}
-              value={form[field]}
-              onChange={handleChange}
-              required
-              style={{ width: '100%', padding: 8 }}
-            />
-          </div>
-        ))}
-        <button type="submit" style={{ padding: '10px 20px' }}>
-          Gửi cấu hình
-        </button>
-      </form>
-      {status && <p style={{ marginTop: 20 }}>{status}</p>}
-    </div>
-  );
-}
+      const result = await res.json();
+      document.getElementById('status').textContent = res.ok
+        ? '✅ Gửi cấu hình thành công!'
+        : `❌ ${result.error || 'Lỗi khi gửi cấu hình'}`;
+    });
+  </script>
+</body>
+</html>
