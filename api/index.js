@@ -1,6 +1,6 @@
 // index.js
 import { generatePaymentUrl } from '../vnpay.js';
-import GHL from '../../ghl.js';
+import GHL from '../ghl.js';
 
 const GHL_ACCESS_TOKEN = process.env.GHL_ACCESS_TOKEN;
 const GHL_LOCATION_ID = process.env.GHL_LOCATION_ID;
