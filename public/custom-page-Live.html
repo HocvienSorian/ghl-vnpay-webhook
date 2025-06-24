@@ -14,8 +14,6 @@
     <input name="locationId" placeholder="Location ID" required />
     <input name="liveApiKey" placeholder="Live API Key" required />
     <input name="livePublishableKey" placeholder="Live Publishable Key" required />
-    <input name="testApiKey" placeholder="Test API Key" required />
-    <input name="testPublishableKey" placeholder="Test Publishable Key" required />
     <button type="submit">Gửi cấu hình</button>
   </form>
   <p id="status"></p>
@@ -28,8 +26,6 @@
         locationId: form.locationId.value,
         liveApiKey: form.liveApiKey.value,
         livePublishableKey: form.livePublishableKey.value,
-        testApiKey: form.testApiKey.value,
-        testPublishableKey: form.testPublishableKey.value,
       };
 
       const res = await fetch('/api/setup-config', {
