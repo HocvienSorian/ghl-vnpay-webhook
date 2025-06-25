@@ -1,0 +1,73 @@
+
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <title>🔐 Cấu hình Payment Provider (Live & Test)</title>
+  <style>
+    body { font-family: sans-serif; max-width: 1000px; margin: 40px auto; padding: 0 20px; }
+    h2 { color: #333; }
+    .container { display: flex; gap: 40px; }
+    .column { flex: 1; border: 1px solid #ccc; padding: 20px; border-radius: 8px; }
+    input, button { display: block; width: 100%; margin: 12px 0; padding: 10px; font-size: 16px; }
+    button { background-color: #0070f3; color: white; border: none; cursor: pointer; }
+    button:hover { background-color: #005bb5; }
+    .status { font-weight: bold; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <h1>⚙️ Cấu hình Payment Provider: LIVE và TEST</h1>
+  <div class="container">
+    <div class="column">
+      <h2>🔴 LIVE Mode</h2>
+      <form id="live-form">
+        <input name="locationId" placeholder="GHL Location ID" required />
+        <input name="accessToken" placeholder="OAuth Access Token" required />
+        <input name="vnp_TmnCode" placeholder="VNP_TMNCODE (LIVE)" required />
+        <input name="vnp_HashSecret" placeholder="VNP_HASHSECRET (LIVE)" required />
+        <button type="submit">Gửi cấu hình LIVE</button>
+      </form>
+      <p class="status" id="live-status"></p>
+    </div>
+    <div class="column">
+      <h2>🟡 TEST Mode</h2>
+      <form id="test-form">
+        <input name="locationId" placeholder="GHL Location ID" required />
+        <input name="accessToken" placeholder="OAuth Access Token" required />
+        <input name="vnp_TmnCode" placeholder="VNP_TMNCODE (TEST)" required />
+        <input name="vnp_HashSecret" placeholder="VNP_HASHSECRET (TEST)" required />
+        <button type="submit">Gửi cấu hình TEST</button>
+      </form>
+      <p class="status" id="test-status"></p>
+    </div>
+  </div>
+
+  <script>
+    async function handleSubmit(formId, statusId, mode) {
+      const form = document.getElementById(formId);
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const data = {
+          locationId: form.locationId.value,
+          accessToken: form.accessToken.value,
+          vnp_TmnCode: form.vnp_TmnCode.value,
+          vnp_HashSecret: form.vnp_HashSecret.value,
+          mode: mode
+        };
+        const res = await fetch('/api/setup-config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        const result = await res.json();
+        document.getElementById(statusId).textContent = res.ok
+          ? `✅ Cấu hình ${mode.toUpperCase()} thành công!`
+          : `❌ ${result.error || 'Lỗi khi gửi cấu hình'}`;
+      });
+    }
+
+    handleSubmit('live-form', 'live-status', 'live');
+    handleSubmit('test-form', 'test-status', 'test');
+  </script>
+</body>
+</html>
