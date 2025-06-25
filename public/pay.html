@@ -5,50 +5,45 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Cổng thanh toán VNPAY</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      padding: 40px;
-      background: #f7f7f7;
-      text-align: center;
-    }
-    h1 {
-      color: #00467f;
-    }
-    .box {
-      background: white;
-      padding: 24px;
-      margin: auto;
-      border-radius: 8px;
-      max-width: 500px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    }
-    button {
-      padding: 12px 24px;
-      font-size: 16px;
-      background-color: #0070f3;
-      color: white;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-    }
-    button:hover {
-      background-color: #005bb5;
-    }
+    body { font-family: Arial, sans-serif; padding: 40px; background: #f7f7f7; text-align: center; }
+    .box { background: white; padding: 24px; margin: auto; border-radius: 8px; max-width: 500px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    button { padding: 12px 24px; font-size: 16px; background-color: #0070f3; color: white; border: none; border-radius: 5px; cursor: pointer; }
+    button:hover { background-color: #005bb5; }
   </style>
 </head>
 <body>
   <div class="box">
     <h1>🧾 Cổng Thanh Toán VNPAY</h1>
-    <p>Trang này là giao diện trung gian để khách hàng thực hiện thanh toán qua VNPAY.</p>
-    <button onclick="proceed()">Tiến hành thanh toán</button>
+    <p id="status">⏳ Đang chờ GHL gửi thông tin thanh toán...</p>
+    <button id="payBtn" style="display:none">Tiến hành thanh toán</button>
   </div>
 
   <script>
-    function proceed() {
-      alert("🔗 Chuyển sang VNPAY...");
-      // Redirect nếu cần, hoặc trigger POST đến VNPAY URL
-      window.location.href = "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html";
-    }
+    let paymentData = null;
+
+    // 1. Gửi sự kiện ready đến GHL khi iframe load xong
+    window.parent.postMessage({ type: 'custom_provider_ready', loaded: true }, '*');
+
+    // 2. Lắng nghe dữ liệu thanh toán từ GHL
+    window.addEventListener('message', (event) => {
+      if (event.data?.type === 'payment_initiate_props') {
+        paymentData = event.data;
+        document.getElementById('status').textContent = `💰 Thanh toán ${paymentData.amount} ${paymentData.currency}`;
+        document.getElementById('payBtn').style.display = 'inline-block';
+      }
+    });
+
+    // 3. Bắt đầu thanh toán (giả lập hoặc redirect thật)
+    document.getElementById('payBtn').onclick = function () {
+      // ❗Ở đây bạn nên gọi API đến VNPAY để tạo redirect_url và redirect
+      // Giả lập thanh toán thành công:
+      setTimeout(() => {
+        window.parent.postMessage({
+          type: 'custom_element_success_response',
+          chargeId: `demo_charge_${Date.now()}`
+        }, '*');
+      }, 1000);
+    };
   </script>
 </body>
 </html>
