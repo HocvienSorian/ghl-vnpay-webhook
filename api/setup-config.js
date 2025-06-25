@@ -24,8 +24,8 @@ export default async function handler(req, res) {
   try {
     // Define environment-based URLs
     const paymentsUrl = 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html';
-    const queryUrl = 'https://ghl-vnpay-webhook.vercel.app/api'; // Your query handler
-    const imageUrl = 'https://ghl-vnpay-webhook.vercel.app/logo.png';
+    const queryUrl = 'https://vnpay-webhook.vercel.app/api'; // Your query handler
+    const imageUrl = 'https://vnpay-webhook.vercel.app/logo.png';
 
     // 1. Create Payment Provider Config
     const providerResp = await axios.post(
