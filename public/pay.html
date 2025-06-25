@@ -1,4 +1,3 @@
-// ✅ Updated pay.html (to use real redirect URL from create-payment-url.js)
 <!DOCTYPE html>
 <html lang="vi">
 <head>
@@ -22,7 +21,7 @@
   <script>
     let paymentData = null;
 
-    // 1. Gửi sự kiện ready đến GHL khi iframe load xong
+    // 1. Gửi ready event đến GHL khi iframe sẵn sàng
     window.parent.postMessage({ type: 'custom_provider_ready', loaded: true }, '*');
 
     // 2. Lắng nghe dữ liệu thanh toán từ GHL
@@ -34,29 +33,36 @@
       }
     });
 
-    // 3. Gọi API tạo redirect URL và chuyển hướng đến VNPAY thật
+    // 3. Khi bấm nút thanh toán
     document.getElementById('payBtn').onclick = async function () {
       try {
-        const res = await fetch('/api/create-payment-url', {
+        const response = await fetch('/api/create-payment-url', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             amount: paymentData.amount,
             orderId: paymentData.transactionId,
-            orderInfo: paymentData.contactId,
-            ipAddr: '127.0.0.1'
+            orderInfo: paymentData.contact.id,
+            ipAddr: '127.0.0.1' // nếu bạn có server-side IP real thì thay ở đây
           })
         });
-        const result = await res.json();
 
-        if (result.paymentUrl) {
+        const result = await response.json();
+
+        if (response.ok && result.paymentUrl) {
           window.location.href = result.paymentUrl;
         } else {
-          alert('Lỗi tạo URL thanh toán.');
+          window.parent.postMessage({
+            type: 'custom_element_error_response',
+            error: { description: result.error || 'Không thể tạo URL thanh toán' }
+          }, '*');
         }
       } catch (err) {
-        console.error('❌ Lỗi thanh toán:', err);
-        alert('Lỗi thanh toán.');
+        console.error('❌ Lỗi khi gọi API tạo URL:', err);
+        window.parent.postMessage({
+          type: 'custom_element_error_response',
+          error: { description: 'Lỗi khi tạo thanh toán VNPAY' }
+        }, '*');
       }
     };
   </script>
