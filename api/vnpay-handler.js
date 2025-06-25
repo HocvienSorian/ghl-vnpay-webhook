@@ -16,44 +16,55 @@ export default function handler(req, res) {
       case 'verify': {
         const { transactionId, apiKey, chargeId, subscriptionId } = payload;
 
-        // 👇 Tại đây bạn nên kiểm tra trạng thái thanh toán từ VNPAY nếu có.
-        const isPaid = true; // bạn có thể thay bằng điều kiện kiểm tra từ DB hoặc webhook
+        // 🧠 TODO: Kiểm tra trạng thái thanh toán từ VNPAY thật nếu cần
+        const isPaid = true;
 
         if (isPaid) {
-          return res.status(200).json({ success: true }); // thông báo thành công
+          return res.status(200).json({ success: true });
         } else {
-          return res.status(200).json({ failed: true }); // thông báo thất bại
+          return res.status(200).json({ failed: true });
         }
       }
 
       case 'list_payment_methods': {
         const { contactId, locationId, apiKey } = payload;
 
-        // 👇 Nếu bạn có lưu thông tin payment method thì trả về danh sách
-        return res.status(200).json([
+        // 🧠 TODO: Nếu có lưu DB thì truy vấn thật ở đây
+        const paymentMethods = [
           {
             id: 'vnpay-method-123',
             type: 'card',
-            title: 'VNPAY Card',
-            subTitle: '****-****-1688',
-            expiry: '12/28',
-            customerId: 'vnpay-customer-001',
-            imageUrl: 'https://vnpay.vn/logo.png'
+            title: 'VNPAY',
+            subTitle: '****6868',
+            expiry: '12/29',
+            customerId: contactId,
+            imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/4/41/Visa_Logo.png'
           }
-        ]);
+        ];
+
+        return res.status(200).json(paymentMethods);
       }
 
       case 'charge_payment': {
-        const { paymentMethodId, amount, transactionId } = payload;
+        const {
+          paymentMethodId,
+          contactId,
+          transactionId,
+          chargeDescription,
+          amount,
+          currency,
+          apiKey
+        } = payload;
 
-        // 👇 Bạn có thể gọi API đến VNPAY thật tại đây nếu cần
+        // 🧠 TODO: Gọi API thanh toán VNPAY thật nếu cần
+
         const chargeId = `vnpay_charge_${Date.now()}`;
 
         return res.status(200).json({
           success: true,
           failed: false,
           chargeId,
-          message: 'Thanh toán thành công từ paymentMethod',
+          message: '💳 Giao dịch thành công từ VNPAY',
           chargeSnapshot: {
             id: chargeId,
             status: 'succeeded',
@@ -65,9 +76,9 @@ export default function handler(req, res) {
       }
 
       default:
-        return res.status(400).json({ error: 'Loại type không hỗ trợ' });
+        return res.status(400).json({ error: `❌ Unsupported type: ${type}` });
     }
   }
 
-  return res.status(405).json({ error: 'Method not allowed' });
+  return res.status(405).json({ error: '❌ Method not allowed' });
 }
