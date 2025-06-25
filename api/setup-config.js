@@ -24,7 +24,7 @@ export default async function handler(req, res) {
   try {
     // Define environment-based URLs
     const paymentsUrl = 'https://vnpay-webhook.vercel.app/pay.html';
-    const queryUrl = 'https://vnpay-webhook.vercel.app/api'; // Your query handler
+    const queryUrl = 'https://vnpay-webhook.vercel.app/api/vnpay-handler'; // Your query handler
     const imageUrl = 'https://vnpay-webhook.vercel.app/logo.png';
 
     // 1. Create Payment Provider Config
