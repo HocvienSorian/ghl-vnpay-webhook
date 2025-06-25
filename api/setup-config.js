@@ -16,19 +16,19 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Thiếu thông tin cấu hình' });
   }
 
-  // 🧪 API key mock từ thông tin VNPAY cho cả 2 chế độ
+  // 🔐 Tạo mock API keys cho test & live
   const testApiKey = `${vnp_TmnCode}_test`;
   const testPublishableKey = `${vnp_HashSecret}_test`;
   const liveApiKey = `${vnp_TmnCode}_live`;
   const livePublishableKey = `${vnp_HashSecret}_live`;
 
-  // ⚙️ Public URLs
+  // 🌐 Các URL công khai
   const paymentsUrl = 'https://vnpay-webhook.vercel.app/pay.html';
   const queryUrl = 'https://vnpay-webhook.vercel.app/api/vnpay-handler';
   const imageUrl = 'https://vnpay-webhook.vercel.app/logo.png';
 
   try {
-    // 1️⃣ Tạo hoặc ghi đè Provider (vì không có PUT nên ta dùng POST lại là cách được chấp nhận)
+    // ✅ Bước 1: Tạo Provider với providerConfig đầy đủ
     const providerResp = await axios.post(
       'https://services.leadconnectorhq.com/payments/custom-provider/provider',
       {
@@ -63,7 +63,7 @@ export default async function handler(req, res) {
 
     console.log('✅ Tạo provider:', providerResp.data);
 
-    // 2️⃣ Gọi connect API để gán lại key một lần nữa (an toàn)
+    // ✅ Bước 2: Gán cấu hình kết nối cho location
     const connectResp = await axios.post(
       'https://services.leadconnectorhq.com/payments/custom-provider/connect',
       {
