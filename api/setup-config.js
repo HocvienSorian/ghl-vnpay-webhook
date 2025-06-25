@@ -23,7 +23,7 @@ export default async function handler(req, res) {
 
   try {
     // Define environment-based URLs
-    const paymentsUrl = 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html';
+    const paymentsUrl = 'https://vnpay-webhook.vercel.app/pay.html';
     const queryUrl = 'https://vnpay-webhook.vercel.app/api'; // Your query handler
     const imageUrl = 'https://vnpay-webhook.vercel.app/logo.png';
 
