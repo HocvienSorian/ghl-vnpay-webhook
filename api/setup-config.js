@@ -21,13 +21,14 @@ export default async function handler(req, res) {
   const apiKey = `${vnp_TmnCode}_${mode}`;
   const publishableKey = `${vnp_HashSecret}_${mode}`;
 
-  // ⚙️ Khai báo các URL
-  const paymentsUrl = 'https://vnpay-webhook.vercel.app/pay.html'; // phải public
-  const queryUrl = 'https://vnpay-webhook.vercel.app/api/vnpay-handler'; // placeholder
-  const imageUrl = 'https://vnpay-webhook.vercel.app/logo.png'; // placeholder
+  // ⚙️ URL public trên Vercel (cần đúng domain bạn đã deploy)
+  const baseUrl = 'https://ghl-vnpay-webhook.vercel.app';
+  const paymentsUrl = `${baseUrl}/pay.html`;
+  const queryUrl = `${baseUrl}/api/vnpay-handler`;
+  const imageUrl = `${baseUrl}/logo.png`;
 
   try {
-    // 1️⃣ Tạo Payment Provider
+    // 1️⃣ Tạo Custom Provider
     const providerResp = await axios.post(
       'https://services.leadconnectorhq.com/payments/custom-provider/provider',
       {
@@ -48,9 +49,9 @@ export default async function handler(req, res) {
       }
     );
 
-    console.log(`✅ Tạo provider ${mode}:`, providerResp.data);
+    console.log(`✅ [${mode.toUpperCase()}] Provider created:`, providerResp.data);
 
-    // 2️⃣ Gọi connect để gán API key
+    // 2️⃣ Connect Provider bằng API key + Publishable key
     const connectResp = await axios.post(
       'https://services.leadconnectorhq.com/payments/custom-provider/connect',
       {
@@ -70,7 +71,7 @@ export default async function handler(req, res) {
       }
     );
 
-    console.log(`✅ Kết nối cấu hình ${mode}:`, connectResp.data);
+    console.log(`✅ [${mode.toUpperCase()}] Connected successfully.`);
 
     return res.status(200).json({
       message: `✅ Cấu hình ${mode.toUpperCase()} thành công!`,
@@ -79,7 +80,7 @@ export default async function handler(req, res) {
     });
   } catch (error) {
     const responseError = error.response?.data || {};
-    console.error(`❌ Lỗi ở bước cấu hình ${mode.toUpperCase()}:`, JSON.stringify(responseError, null, 2));
+    console.error(`❌ [${mode.toUpperCase()}] Lỗi cấu hình:`, responseError);
 
     return res.status(500).json({
       error: 'Lỗi khi cấu hình provider',
