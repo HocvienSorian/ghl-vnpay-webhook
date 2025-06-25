@@ -1,70 +1,53 @@
 <!DOCTYPE html>
-<html lang="vi">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cổng thanh toán VNPAY</title>
-  <style>
-    body { font-family: Arial, sans-serif; padding: 40px; background: #f7f7f7; text-align: center; }
-    .box { background: white; padding: 24px; margin: auto; border-radius: 8px; max-width: 500px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-    button { padding: 12px 24px; font-size: 16px; background-color: #0070f3; color: white; border: none; border-radius: 5px; cursor: pointer; }
-    button:hover { background-color: #005bb5; }
-  </style>
-</head>
-<body>
-  <div class="box">
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Cổng Thanh Toán VNPAY</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        text-align: center;
+        padding: 40px;
+      }
+    </style>
+  </head>
+  <body>
     <h1>🧾 Cổng Thanh Toán VNPAY</h1>
-    <p id="status">⏳ Đang chờ GHL gửi thông tin thanh toán...</p>
-    <button id="payBtn" style="display:none">Tiến hành thanh toán</button>
-  </div>
+    <p>⏳ Đang chờ GHL gửi thông tin thanh toán...</p>
 
-  <script>
-    let paymentData = null;
+    <script>
+      window.addEventListener("message", async (event) => {
+        console.log("📥 Nhận dữ liệu từ GHL:", event.data);
 
-    // 1. Gửi ready event đến GHL khi iframe sẵn sàng
-    window.parent.postMessage({ type: 'custom_provider_ready', loaded: true }, '*');
+        const data = event.data;
 
-    // 2. Lắng nghe dữ liệu thanh toán từ GHL
-    window.addEventListener('message', (event) => {
-      if (event.data?.type === 'payment_initiate_props') {
-        paymentData = event.data;
-        document.getElementById('status').textContent = `💰 Thanh toán ${paymentData.amount} ${paymentData.currency}`;
-        document.getElementById('payBtn').style.display = 'inline-block';
-      }
-    });
-
-    // 3. Khi bấm nút thanh toán
-    document.getElementById('payBtn').onclick = async function () {
-      try {
-        const response = await fetch('/api/create-payment-url', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            amount: paymentData.amount,
-            orderId: paymentData.transactionId,
-            orderInfo: paymentData.contact.id,
-            ipAddr: '127.0.0.1' // nếu bạn có server-side IP real thì thay ở đây
-          })
-        });
-
-        const result = await response.json();
-
-        if (response.ok && result.paymentUrl) {
-          window.location.href = result.paymentUrl;
-        } else {
-          window.parent.postMessage({
-            type: 'custom_element_error_response',
-            error: { description: result.error || 'Không thể tạo URL thanh toán' }
-          }, '*');
+        if (!data || !data.amount || !data.contactId || !data.transactionId || !data.apiKey) {
+          return alert("❌ Thiếu thông tin từ GHL. Không thể tiếp tục.");
         }
-      } catch (err) {
-        console.error('❌ Lỗi khi gọi API tạo URL:', err);
-        window.parent.postMessage({
-          type: 'custom_element_error_response',
-          error: { description: 'Lỗi khi tạo thanh toán VNPAY' }
-        }, '*');
-      }
-    };
-  </script>
-</body>
+
+        try {
+          // Gửi request tạo link thanh toán tới API VNPAY backend
+          const res = await fetch("/api/create-payment-url", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(data),
+          });
+
+          const result = await res.json();
+
+          if (result.paymentUrl) {
+            console.log("✅ Chuyển hướng đến:", result.paymentUrl);
+            window.location.href = result.paymentUrl;
+          } else {
+            alert("❌ Không thể tạo link thanh toán.");
+          }
+        } catch (err) {
+          console.error("🔥 Lỗi khi gửi dữ liệu đến backend:", err);
+          alert("Lỗi hệ thống.");
+        }
+      });
+    </script>
+  </body>
 </html>
