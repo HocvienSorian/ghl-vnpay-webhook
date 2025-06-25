@@ -1,3 +1,5 @@
+// ✅ Updated pay.html (to use real redirect URL from create-payment-url.js)
+
 <!DOCTYPE html>
 <html lang="vi">
 <head>
@@ -33,16 +35,30 @@
       }
     });
 
-    // 3. Bắt đầu thanh toán (giả lập hoặc redirect thật)
-    document.getElementById('payBtn').onclick = function () {
-      // ❗Ở đây bạn nên gọi API đến VNPAY để tạo redirect_url và redirect
-      // Giả lập thanh toán thành công:
-      setTimeout(() => {
-        window.parent.postMessage({
-          type: 'custom_element_success_response',
-          chargeId: `demo_charge_${Date.now()}`
-        }, '*');
-      }, 1000);
+    // 3. Gọi API tạo redirect URL và chuyển hướng đến VNPAY thật
+    document.getElementById('payBtn').onclick = async function () {
+      try {
+        const res = await fetch('/api/create-payment-url', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            amount: paymentData.amount,
+            orderId: paymentData.transactionId,
+            orderInfo: paymentData.contactId,
+            ipAddr: '127.0.0.1'
+          })
+        });
+        const result = await res.json();
+
+        if (result.paymentUrl) {
+          window.location.href = result.paymentUrl;
+        } else {
+          alert('Lỗi tạo URL thanh toán.');
+        }
+      } catch (err) {
+        console.error('❌ Lỗi thanh toán:', err);
+        alert('Lỗi thanh toán.');
+      }
     };
   </script>
 </body>
