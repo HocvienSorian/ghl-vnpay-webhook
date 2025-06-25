@@ -24,12 +24,11 @@ function getVnpConfig() {
 }
 
 // ✅ Tạo URL thanh toán
-function generatePaymentUrl({ amount, bankCode = '', orderInfo, orderType = 'other', locale = 'vn', ipAddr }) {
+function generatePaymentUrl({ amount, bankCode = '', orderInfo, orderType = 'other', locale = 'vn', ipAddr, orderId }) {
   const vnpayConfig = getVnpConfig();
 
   const date = new Date();
   const createDate = date.toISOString().replace(/[-T:Z.]/g, '').slice(0, 14);
-  const txnRef = date.toTimeString().slice(0, 8).replace(/:/g, '');
 
   const vnp_Params = {
     vnp_Version: vnpayConfig.vnp_Version,
@@ -37,11 +36,11 @@ function generatePaymentUrl({ amount, bankCode = '', orderInfo, orderType = 'oth
     vnp_TmnCode: vnpayConfig.vnp_TmnCode,
     vnp_Locale: locale,
     vnp_CurrCode: vnpayConfig.vnp_CurrCode,
-    vnp_TxnRef: txnRef,
+    vnp_TxnRef: orderId, // ✅ dùng orderId từ GHL
     vnp_OrderInfo: orderInfo,
     vnp_OrderType: orderType,
     vnp_Amount: amount * 100,
-    vnp_ReturnUrl: encodeURIComponent(vnpayConfig.vnp_ReturnUrl), // ✅ encode khi tạo URL
+    vnp_ReturnUrl: vnpayConfig.vnp_ReturnUrl, // ✅ KHÔNG encode
     vnp_IpAddr: ipAddr,
     vnp_CreateDate: createDate,
   };
@@ -64,28 +63,3 @@ function generatePaymentUrl({ amount, bankCode = '', orderInfo, orderType = 'oth
 
   return `${vnpayConfig.vnp_Url}?${qs.stringify(sortedParams, { encode: false })}`;
 }
-
-// ✅ Kiểm tra chữ ký phản hồi từ VNPAY
-function verifyVnpResponse(queryParams) {
-  const vnpayConfig = getVnpConfig();
-  const { vnp_SecureHash, vnp_SecureHashType, ...rest } = queryParams;
-
-  // ✅ Giải mã URL encode (nếu có) để đảm bảo hash khớp
-  if (rest.vnp_ReturnUrl) {
-    rest.vnp_ReturnUrl = decodeURIComponent(rest.vnp_ReturnUrl);
-  }
-
-  const sortedParams = sortObject(rest);
-  const signData = qs.stringify(sortedParams, { encode: false });
-
-  const hmac = crypto.createHmac('sha512', vnpayConfig.vnp_HashSecret);
-  const hash = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
-
-  return hash === vnp_SecureHash;
-}
-
-export {
-  generatePaymentUrl,
-  verifyVnpResponse,
-  sortObject,
-};
