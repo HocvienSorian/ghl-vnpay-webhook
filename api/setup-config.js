@@ -18,22 +18,21 @@ export default async function handler(req, res) {
   }
 
   // 🧪 Mock API key từ thông tin VNPAY
-  const apiKey = `${vnp_TmnCode}_${mode}`;
-  const publishableKey = `${vnp_HashSecret}_${mode}`;
+  const apiKey = ${vnp_TmnCode}_${mode};
+  const publishableKey = ${vnp_HashSecret}_${mode};
 
-  // ⚙️ URL public trên Vercel (cần đúng domain bạn đã deploy)
-  const baseUrl = 'https://ghl-vnpay-webhook.vercel.app';
-  const paymentsUrl = `${baseUrl}/pay.html`;
-  const queryUrl = `${baseUrl}/api/vnpay-handler`;
-  const imageUrl = `${baseUrl}/logo.png`;
+  // ⚙️ Khai báo các URL
+  const paymentsUrl = 'https://vnpay-webhook.vercel.app/pay.html'; // phải public
+  const queryUrl = 'https://vnpay-webhook.vercel.app/api/vnpay-handler'; // placeholder
+  const imageUrl = 'https://vnpay-webhook.vercel.app/logo.png'; // placeholder
 
   try {
-    // 1️⃣ Tạo Custom Provider
+    // 1️⃣ Tạo Payment Provider
     const providerResp = await axios.post(
       'https://services.leadconnectorhq.com/payments/custom-provider/provider',
       {
-        name: `VNPAY ${mode.toUpperCase()} Integration`,
-        description: `Tích hợp cổng VNPAY chế độ ${mode.toUpperCase()}`,
+        name: VNPAY ${mode.toUpperCase()} Integration,
+        description: Tích hợp cổng VNPAY chế độ ${mode.toUpperCase()},
         paymentsUrl,
         queryUrl,
         imageUrl
@@ -41,7 +40,7 @@ export default async function handler(req, res) {
       {
         params: { locationId },
         headers: {
-          Authorization: `Bearer ${accessToken}`,
+          Authorization: Bearer ${accessToken},
           Version: '2021-07-28',
           'Content-Type': 'application/json',
           Accept: 'application/json'
@@ -49,9 +48,9 @@ export default async function handler(req, res) {
       }
     );
 
-    console.log(`✅ [${mode.toUpperCase()}] Provider created:`, providerResp.data);
+    console.log(✅ Tạo provider ${mode}:, providerResp.data);
 
-    // 2️⃣ Connect Provider bằng API key + Publishable key
+    // 2️⃣ Gọi connect để gán API key
     const connectResp = await axios.post(
       'https://services.leadconnectorhq.com/payments/custom-provider/connect',
       {
@@ -63,7 +62,7 @@ export default async function handler(req, res) {
       {
         params: { locationId },
         headers: {
-          Authorization: `Bearer ${accessToken}`,
+          Authorization: Bearer ${accessToken},
           Version: '2021-07-28',
           'Content-Type': 'application/json',
           Accept: 'application/json'
@@ -71,16 +70,16 @@ export default async function handler(req, res) {
       }
     );
 
-    console.log(`✅ [${mode.toUpperCase()}] Connected successfully.`);
+    console.log(✅ Kết nối cấu hình ${mode}:, connectResp.data);
 
     return res.status(200).json({
-      message: `✅ Cấu hình ${mode.toUpperCase()} thành công!`,
+      message: ✅ Cấu hình ${mode.toUpperCase()} thành công!,
       provider: providerResp.data,
       connection: connectResp.data
     });
   } catch (error) {
     const responseError = error.response?.data || {};
-    console.error(`❌ [${mode.toUpperCase()}] Lỗi cấu hình:`, responseError);
+    console.error(❌ Lỗi ở bước cấu hình ${mode.toUpperCase()}:, JSON.stringify(responseError, null, 2));
 
     return res.status(500).json({
       error: 'Lỗi khi cấu hình provider',
