@@ -1,4 +1,4 @@
-export default function handler(req, res) {
+export default async function handler(req, res) {
   if (req.method === 'GET') {
     return res.status(200).json({
       message: '✅ VNPAY query handler is working',
@@ -16,7 +16,7 @@ export default function handler(req, res) {
       case 'verify': {
         const { transactionId, apiKey, chargeId, subscriptionId } = payload;
 
-        // 🧠 TODO: Kiểm tra trạng thái thanh toán từ VNPAY thật nếu cần
+        // ✅ Giả lập kiểm tra thanh toán (có thể thay bằng logic DB/webhook thật)
         const isPaid = true;
 
         if (isPaid) {
@@ -29,15 +29,15 @@ export default function handler(req, res) {
       case 'list_payment_methods': {
         const { contactId, locationId, apiKey } = payload;
 
-        // 🧠 TODO: Nếu có lưu DB thì truy vấn thật ở đây
+        // ✅ Trả về ít nhất 1 phương thức thanh toán hợp lệ
         const paymentMethods = [
           {
-            id: 'vnpay-method-123',
+            id: 'vnpay-method-6868',
             type: 'card',
             title: 'VNPAY',
-            subTitle: '****6868',
+            subTitle: '**** 6868',
             expiry: '12/29',
-            customerId: contactId,
+            customerId: contactId, // BẮT BUỘC PHẢI CÓ!
             imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/4/41/Visa_Logo.png'
           }
         ];
@@ -56,15 +56,14 @@ export default function handler(req, res) {
           apiKey
         } = payload;
 
-        // 🧠 TODO: Gọi API thanh toán VNPAY thật nếu cần
-
+        // ✅ Giả lập mã giao dịch, bạn có thể gọi API thực tế của VNPAY tại đây
         const chargeId = `vnpay_charge_${Date.now()}`;
 
         return res.status(200).json({
           success: true,
           failed: false,
           chargeId,
-          message: '💳 Giao dịch thành công từ VNPAY',
+          message: '💳 Giao dịch thành công qua VNPAY',
           chargeSnapshot: {
             id: chargeId,
             status: 'succeeded',
