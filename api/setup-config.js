@@ -9,33 +9,46 @@ export default async function handler(req, res) {
     locationId,
     accessToken,
     vnp_TmnCode,
-    vnp_HashSecret,
-    mode // "test" hoặc "live"
+    vnp_HashSecret
   } = req.body;
 
-  if (!locationId || !accessToken || !vnp_TmnCode || !vnp_HashSecret || !mode) {
+  if (!locationId || !accessToken || !vnp_TmnCode || !vnp_HashSecret) {
     return res.status(400).json({ error: 'Thiếu thông tin cấu hình' });
   }
 
-  // 🧪 Mock API key từ thông tin VNPAY
-  const apiKey = `${vnp_TmnCode}_${mode}`;
-  const publishableKey = `${vnp_HashSecret}_${mode}`;
+  // 🧪 API key mock từ thông tin VNPAY cho cả 2 chế độ
+  const testApiKey = `${vnp_TmnCode}_test`;
+  const testPublishableKey = `${vnp_HashSecret}_test`;
+  const liveApiKey = `${vnp_TmnCode}_live`;
+  const livePublishableKey = `${vnp_HashSecret}_live`;
 
-  // ⚙️ Khai báo các URL
-  const paymentsUrl = 'https://vnpay-webhook.vercel.app/pay.html'; // phải public
-  const queryUrl = 'https://vnpay-webhook.vercel.app/api/vnpay-handler'; // placeholder
-  const imageUrl = 'https://vnpay-webhook.vercel.app/logo.png'; // placeholder
+  // ⚙️ Public URLs
+  const paymentsUrl = 'https://vnpay-webhook.vercel.app/pay.html';
+  const queryUrl = 'https://vnpay-webhook.vercel.app/api/vnpay-handler';
+  const imageUrl = 'https://vnpay-webhook.vercel.app/logo.png';
 
   try {
-    // 1️⃣ Tạo Payment Provider
+    // 1️⃣ Tạo hoặc ghi đè Provider (vì không có PUT nên ta dùng POST lại là cách được chấp nhận)
     const providerResp = await axios.post(
       'https://services.leadconnectorhq.com/payments/custom-provider/provider',
       {
-        name: `VNPAY ${mode.toUpperCase()} Integration`,
-        description: `Tích hợp cổng VNPAY chế độ ${mode.toUpperCase()}`,
+        name: `VNPAY Integration`,
+        description: `Tích hợp cổng VNPAY cho cả LIVE & TEST`,
         paymentsUrl,
         queryUrl,
-        imageUrl
+        imageUrl,
+        providerConfig: {
+          test: {
+            liveMode: false,
+            apiKey: testApiKey,
+            publishableKey: testPublishableKey
+          },
+          live: {
+            liveMode: true,
+            apiKey: liveApiKey,
+            publishableKey: livePublishableKey
+          }
+        }
       },
       {
         params: { locationId },
@@ -48,15 +61,19 @@ export default async function handler(req, res) {
       }
     );
 
-    console.log(`✅ Tạo provider ${mode}:`, providerResp.data);
+    console.log('✅ Tạo provider:', providerResp.data);
 
-    // 2️⃣ Gọi connect để gán API key
+    // 2️⃣ Gọi connect API để gán lại key một lần nữa (an toàn)
     const connectResp = await axios.post(
       'https://services.leadconnectorhq.com/payments/custom-provider/connect',
       {
-        [mode]: {
-          apiKey,
-          publishableKey
+        test: {
+          apiKey: testApiKey,
+          publishableKey: testPublishableKey
+        },
+        live: {
+          apiKey: liveApiKey,
+          publishableKey: livePublishableKey
         }
       },
       {
@@ -70,16 +87,17 @@ export default async function handler(req, res) {
       }
     );
 
-    console.log(`✅ Kết nối cấu hình ${mode}:`, connectResp.data);
+    console.log('✅ Kết nối cấu hình:', connectResp.data);
 
     return res.status(200).json({
-      message: `✅ Cấu hình ${mode.toUpperCase()} thành công!`,
+      message: '✅ Cấu hình provider thành công!',
       provider: providerResp.data,
       connection: connectResp.data
     });
+
   } catch (error) {
     const responseError = error.response?.data || {};
-    console.error(`❌ Lỗi ở bước cấu hình ${mode.toUpperCase()}:`, JSON.stringify(responseError, null, 2));
+    console.error('❌ Lỗi khi cấu hình provider:', JSON.stringify(responseError, null, 2));
 
     return res.status(500).json({
       error: 'Lỗi khi cấu hình provider',
