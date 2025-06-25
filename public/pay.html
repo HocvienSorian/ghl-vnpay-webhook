@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
   <head>
     <meta charset="UTF-8" />
     <title>Cổng Thanh Toán VNPAY</title>
@@ -19,14 +19,17 @@
       window.addEventListener("message", async (event) => {
         console.log("📥 Nhận dữ liệu từ GHL:", event.data);
 
+        // 🔒 Kiểm tra origin nếu cần (bỏ qua nếu đang test)
+        // if (event.origin !== 'https://app.gohighlevel.com') return;
+
         const data = event.data;
 
         if (!data || !data.amount || !data.contactId || !data.transactionId || !data.apiKey) {
-          return alert("❌ Thiếu thông tin từ GHL. Không thể tiếp tục.");
+          alert("❌ Thiếu thông tin từ GHL. Không thể tiếp tục.");
+          return;
         }
 
         try {
-          // Gửi request tạo link thanh toán tới API VNPAY backend
           const res = await fetch("/api/create-payment-url", {
             method: "POST",
             headers: {
@@ -42,12 +45,16 @@
             window.location.href = result.paymentUrl;
           } else {
             alert("❌ Không thể tạo link thanh toán.");
+            console.error(result);
           }
         } catch (err) {
-          console.error("🔥 Lỗi khi gửi dữ liệu đến backend:", err);
-          alert("Lỗi hệ thống.");
+          console.error("🔥 Lỗi gửi dữ liệu:", err);
+          alert("❌ Lỗi hệ thống. Vui lòng thử lại.");
         }
       });
+
+      // 🛠 Debug: thông báo đang chờ
+      console.log("🛠 DEBUG: Đang chờ GHL gửi postMessage...");
     </script>
   </body>
 </html>
