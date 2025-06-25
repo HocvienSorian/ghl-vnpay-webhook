@@ -15,9 +15,10 @@ export default async function handler(req, res) {
     switch (type) {
       case 'verify': {
         const { transactionId, apiKey, chargeId, subscriptionId } = payload;
+        console.log('📥 VERIFY CALL:', payload);
 
-        // ✅ Giả lập kiểm tra thanh toán (có thể thay bằng logic DB/webhook thật)
-        const isPaid = true;
+        // ✅ Tạm xác nhận thành công nếu chargeId bắt đầu bằng "vnpay"
+        const isPaid = chargeId?.startsWith('vnpay');
 
         if (isPaid) {
           return res.status(200).json({ success: true });
@@ -29,16 +30,22 @@ export default async function handler(req, res) {
       case 'list_payment_methods': {
         const { contactId, locationId, apiKey } = payload;
 
-        // ✅ Trả về ít nhất 1 phương thức thanh toán hợp lệ
+        if (!contactId) {
+          console.warn('⚠️ Thiếu contactId từ GHL → không trả về payment method');
+          return res.status(400).json({ error: 'Thiếu contactId' });
+        }
+
+        console.log('📥 list_payment_methods payload:', payload);
+
         const paymentMethods = [
           {
-            id: 'vnpay-method-6868',
+            id: `vnpay-method-${contactId}`, // Tùy biến cho từng user
             type: 'card',
-            title: 'VNPAY',
-            subTitle: '**** 6868',
+            title: 'VNPay',
+            subTitle: 'QR/Ví điện tử',
             expiry: '12/29',
             customerId: contactId, // BẮT BUỘC PHẢI CÓ!
-            imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/4/41/Visa_Logo.png'
+            imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/f/f1/VNPAY_logo.png'
           }
         ];
 
@@ -56,14 +63,25 @@ export default async function handler(req, res) {
           apiKey
         } = payload;
 
-        // ✅ Giả lập mã giao dịch, bạn có thể gọi API thực tế của VNPAY tại đây
+        if (!contactId || !transactionId || !amount) {
+          return res.status(400).json({ error: 'Thiếu thông tin giao dịch' });
+        }
+
+        console.log('📥 charge_payment:', {
+          paymentMethodId,
+          transactionId,
+          contactId,
+          amount,
+          currency
+        });
+
         const chargeId = `vnpay_charge_${Date.now()}`;
 
         return res.status(200).json({
           success: true,
           failed: false,
           chargeId,
-          message: '💳 Giao dịch thành công qua VNPAY',
+          message: '💳 Giao dịch thành công qua VNPay (demo)',
           chargeSnapshot: {
             id: chargeId,
             status: 'succeeded',
