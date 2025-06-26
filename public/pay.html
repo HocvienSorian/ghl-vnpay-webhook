@@ -20,11 +20,10 @@
       window.addEventListener("load", () => {
         setTimeout(() => {
           console.log("🚀 Iframe loaded – gửi custom_provider_ready");
-          window.top.postMessage(
+          window.postMessage(
             {
               type: "custom_provider_ready",
               loaded: true
-              providerId: "685a526dc7cae21cd9db1a56"
             },
             "*"
           );
