@@ -16,21 +16,24 @@
     <p>⏳ Đang chờ GHL gửi thông tin thanh toán...</p>
 
     <script>
-      // 🔔 Gửi tín hiệu cho GHL biết iframe đã sẵn sàng
-      window.parent.postMessage(
-        {
-          type: "custom_provider_ready",
-          loaded: true
-        },
-        "*"
-      );
+      // ✅ Gửi tín hiệu cho GHL biết iframe đã sẵn sàng
+      window.addEventListener("load", () => {
+        console.log("🚀 Iframe loaded – gửi custom_provider_ready");
+        window.parent.postMessage(
+          {
+            type: "custom_provider_ready",
+            loaded: true
+          },
+          "*"
+        );
+      });
 
-      // 🧠 Đợi GHL gửi dữ liệu thanh toán
+      // ✅ Lắng nghe dữ liệu từ GHL
       window.addEventListener("message", async (event) => {
         const data = event.data;
         console.log("📥 Nhận dữ liệu từ GHL:", data);
 
-        // ✅ Kiểm tra đúng loại dữ liệu cần (tránh xử lý event không liên quan)
+        // ✅ Kiểm tra dữ liệu hợp lệ
         if (
           !data ||
           data.type !== "payment_initiate_props" ||
@@ -39,15 +42,18 @@
           !data.apiKey ||
           !data.contact?.id
         ) {
+          console.warn("⚠️ Dữ liệu không hợp lệ hoặc thiếu:", data);
           alert("❌ Thiếu thông tin thanh toán từ GHL.");
           return;
         }
 
         try {
-          // 📦 Gửi dữ liệu sang backend để tạo paymentUrl
+          // ✅ Gửi dữ liệu đến backend để tạo URL thanh toán VNPAY
           const res = await fetch("/api/create-payment-url", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json"
+            },
             body: JSON.stringify({
               amount: data.amount,
               orderId: data.transactionId,
@@ -66,11 +72,11 @@
             console.log("✅ Chuyển hướng tới VNPAY:", result.paymentUrl);
             window.location.href = result.paymentUrl;
           } else {
+            console.error("❌ Không nhận được paymentUrl:", result);
             alert("❌ Không thể tạo link thanh toán.");
-            console.error(result);
           }
         } catch (err) {
-          console.error("🔥 Lỗi gửi dữ liệu:", err);
+          console.error("🔥 Lỗi khi gọi API tạo URL:", err);
           alert("❌ Có lỗi xảy ra. Vui lòng thử lại.");
         }
       });
