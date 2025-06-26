@@ -16,26 +16,32 @@
     <p>⏳ Đang chờ GHL gửi thông tin thanh toán...</p>
 
     <script>
-      // ✅ Gửi thông báo iframe đã sẵn sàng (không dùng parent)
+      // ✅ Gửi tín hiệu "iframe sẵn sàng" cho GHL sau khi load xong
       window.addEventListener("load", () => {
-        console.log("🚀 Iframe loaded – gửi custom_provider_ready");
-        window.postMessage(
-          {
-            type: "custom_provider_ready",
-            loaded: true
-          },
-          "*"
-        );
+        setTimeout(() => {
+          console.log("🚀 Iframe loaded – gửi custom_provider_ready");
+          window.parent.postMessage(
+            {
+              type: "custom_provider_ready",
+              loaded: true
+            },
+            "*"
+          );
+        }, 300); // ⏱ Trễ 300ms để chắc chắn iframe đã attach
       });
 
-      // ✅ Đợi GHL gửi payment data
+      // ✅ Nhận dữ liệu thanh toán từ GHL
       window.addEventListener("message", async (event) => {
         const data = event.data;
         console.log("📥 Nhận dữ liệu từ GHL:", data);
 
-        // Chỉ xử lý event của GHL
-        if (data?.type !== "payment_initiate_props") return;
+        // 👉 Kiểm tra type để đảm bảo đúng luồng
+        if (data?.type !== "payment_initiate_props") {
+          console.warn("⚠️ Bỏ qua message không phải payment_initiate_props:", data?.type);
+          return;
+        }
 
+        // 👉 Kiểm tra dữ liệu bắt buộc
         if (
           !data.amount ||
           !data.transactionId ||
@@ -43,10 +49,12 @@
           !data.contact?.id
         ) {
           alert("❌ Thiếu thông tin thanh toán từ GHL.");
+          console.error("❌ Thiếu dữ liệu:", data);
           return;
         }
 
         try {
+          // 🔁 Gửi request đến backend để tạo URL VNPAY
           const res = await fetch("/api/create-payment-url", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
