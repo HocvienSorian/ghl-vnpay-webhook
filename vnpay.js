@@ -1,3 +1,4 @@
+// vnpay.js
 import crypto from 'crypto';
 import qs from 'qs';
 
@@ -23,8 +24,7 @@ function getVnpConfig() {
   };
 }
 
-// ✅ Tạo URL thanh toán
-function generatePaymentUrl({ amount, bankCode = '', orderInfo, orderType = 'other', locale = 'vn', ipAddr, orderId }) {
+export function generatePaymentUrl({ amount, bankCode = '', orderInfo, orderType = 'other', locale = 'vn', ipAddr, orderId }) {
   const vnpayConfig = getVnpConfig();
 
   const date = new Date();
@@ -36,11 +36,11 @@ function generatePaymentUrl({ amount, bankCode = '', orderInfo, orderType = 'oth
     vnp_TmnCode: vnpayConfig.vnp_TmnCode,
     vnp_Locale: locale,
     vnp_CurrCode: vnpayConfig.vnp_CurrCode,
-    vnp_TxnRef: orderId, // ✅ dùng orderId từ GHL
+    vnp_TxnRef: orderId,
     vnp_OrderInfo: orderInfo,
     vnp_OrderType: orderType,
     vnp_Amount: amount * 100,
-    vnp_ReturnUrl: vnpayConfig.vnp_ReturnUrl, // ✅ KHÔNG encode
+    vnp_ReturnUrl: vnpayConfig.vnp_ReturnUrl,
     vnp_IpAddr: ipAddr,
     vnp_CreateDate: createDate,
   };
@@ -57,7 +57,6 @@ function generatePaymentUrl({ amount, bankCode = '', orderInfo, orderType = 'oth
 
   sortedParams.vnp_SecureHash = secureHash;
 
-  // 🔍 DEBUG
   console.log("🧾 signData:", signData);
   console.log("🔐 secureHash:", secureHash);
 
