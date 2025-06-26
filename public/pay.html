@@ -20,7 +20,7 @@
       window.addEventListener("load", () => {
         setTimeout(() => {
           console.log("🚀 Iframe loaded – gửi custom_provider_ready");
-          window.parent.postMessage(
+          window.top.postMessage(
             {
               type: "custom_provider_ready",
               loaded: true
