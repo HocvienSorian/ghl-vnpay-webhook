@@ -16,32 +16,54 @@
     <p>⏳ Đang chờ GHL gửi thông tin thanh toán...</p>
 
     <script>
+      // 🔔 Gửi tín hiệu cho GHL biết iframe đã sẵn sàng
+      window.parent.postMessage(
+        {
+          type: "custom_provider_ready",
+          loaded: true
+        },
+        "*"
+      );
+
+      // 🧠 Đợi GHL gửi dữ liệu thanh toán
       window.addEventListener("message", async (event) => {
-        console.log("📥 Nhận dữ liệu từ GHL:", event.data);
-
-        // 🔒 Kiểm tra origin nếu cần (bỏ qua nếu đang test)
-        // if (event.origin !== 'https://app.gohighlevel.com') return;
-
         const data = event.data;
+        console.log("📥 Nhận dữ liệu từ GHL:", data);
 
-        if (!data || !data.amount || !data.contactId || !data.transactionId || !data.apiKey) {
-          alert("❌ Thiếu thông tin từ GHL. Không thể tiếp tục.");
+        // ✅ Kiểm tra đúng loại dữ liệu cần (tránh xử lý event không liên quan)
+        if (
+          !data ||
+          data.type !== "payment_initiate_props" ||
+          !data.amount ||
+          !data.transactionId ||
+          !data.apiKey ||
+          !data.contact?.id
+        ) {
+          alert("❌ Thiếu thông tin thanh toán từ GHL.");
           return;
         }
 
         try {
+          // 📦 Gửi dữ liệu sang backend để tạo paymentUrl
           const res = await fetch("/api/create-payment-url", {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(data),
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              amount: data.amount,
+              orderId: data.transactionId,
+              orderInfo: "Thanh toán từ GHL",
+              transactionId: data.transactionId,
+              contactId: data.contact.id,
+              locationId: data.locationId,
+              currency: data.currency,
+              apiKey: data.apiKey
+            })
           });
 
           const result = await res.json();
 
           if (result.paymentUrl) {
-            console.log("✅ Chuyển hướng đến:", result.paymentUrl);
+            console.log("✅ Chuyển hướng tới VNPAY:", result.paymentUrl);
             window.location.href = result.paymentUrl;
           } else {
             alert("❌ Không thể tạo link thanh toán.");
@@ -49,11 +71,10 @@
           }
         } catch (err) {
           console.error("🔥 Lỗi gửi dữ liệu:", err);
-          alert("❌ Lỗi hệ thống. Vui lòng thử lại.");
+          alert("❌ Có lỗi xảy ra. Vui lòng thử lại.");
         }
       });
 
-      // 🛠 Debug: thông báo đang chờ
       console.log("🛠 DEBUG: Đang chờ GHL gửi postMessage...");
     </script>
   </body>
