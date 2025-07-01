@@ -11,6 +11,12 @@ function sortObject(obj) {
   return sorted;
 }
 
+function formatDateVN(date = new Date()) {
+  const tzOffset = date.getTimezoneOffset() * 60000; // phút → ms
+  const localTime = new Date(date.getTime() - tzOffset + 7 * 60 * 60 * 1000); // GMT+7
+  return localTime.toISOString().replace(/[-T:Z.]/g, '').slice(0, 14);
+}
+
 function getVnpConfig() {
   return {
     vnp_Version: '2.1.0',
@@ -27,8 +33,7 @@ function getVnpConfig() {
 export function generatePaymentUrl({ amount, bankCode = '', orderInfo, orderType = 'other', locale = 'vn', ipAddr, orderId }) {
   const vnpayConfig = getVnpConfig();
 
-  const date = new Date();
-  const createDate = date.toISOString().replace(/[-T:Z.]/g, '').slice(0, 14);
+  const createDate = formatDateVN();
 
   const vnp_Params = {
     vnp_Version: vnpayConfig.vnp_Version,
@@ -39,7 +44,7 @@ export function generatePaymentUrl({ amount, bankCode = '', orderInfo, orderType
     vnp_TxnRef: orderId,
     vnp_OrderInfo: orderInfo,
     vnp_OrderType: orderType,
-    vnp_Amount: amount * 100,
+    vnp_Amount: Math.round(Number(amount)) * 100,
     vnp_ReturnUrl: vnpayConfig.vnp_ReturnUrl,
     vnp_IpAddr: ipAddr,
     vnp_CreateDate: createDate,
@@ -54,9 +59,9 @@ export function generatePaymentUrl({ amount, bankCode = '', orderInfo, orderType
 
   const hmac = crypto.createHmac('sha512', vnpayConfig.vnp_HashSecret);
   const secureHash = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
-
   sortedParams.vnp_SecureHash = secureHash;
 
+  console.log("🔧 ENV config:", vnpayConfig);
   console.log("🧾 signData:", signData);
   console.log("🔐 secureHash:", secureHash);
 
