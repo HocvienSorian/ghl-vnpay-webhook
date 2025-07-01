@@ -1,3 +1,5 @@
+// pages/api/fetch-ghl-transaction.js
+
 import axios from 'axios';
 
 const GHL_API_BASE = 'https://services.leadconnectorhq.com';
@@ -13,8 +15,8 @@ const GHL_HEADERS = {
 
 async function fetchLatestTransaction() {
   try {
-    // Bước 1: Lấy danh sách transaction
-    const txList = await axios.get(`${GHL_API_BASE}/payments/transactions`, {
+    // B1: Gọi API List Transactions
+    const txListRes = await axios.get(`${GHL_API_BASE}/payments/transactions`, {
       params: {
         altId: GHL_LOCATION_ID,
         altType: GHL_ALT_TYPE,
@@ -23,12 +25,13 @@ async function fetchLatestTransaction() {
       headers: GHL_HEADERS,
     });
 
-    const transaction = txList.data?.data?.[0];
-    if (!transaction) throw new Error('No transactions found');
-    const txnId = transaction._id;
+    const latestTransaction = txListRes.data?.data?.[0];
+    if (!latestTransaction) throw new Error('No transactions found.');
 
-    // Bước 2: Lấy chi tiết
-    const txDetail = await axios.get(`${GHL_API_BASE}/payments/transactions/${txnId}`, {
+    const { _id: transactionId, contactId, currency, amount, entityId } = latestTransaction;
+
+    // B2: Gọi API Transaction Detail (nếu cần thêm dữ liệu)
+    const txDetailRes = await axios.get(`${GHL_API_BASE}/payments/transactions/${transactionId}`, {
       params: {
         altId: GHL_LOCATION_ID,
         altType: GHL_ALT_TYPE,
@@ -36,22 +39,33 @@ async function fetchLatestTransaction() {
       headers: GHL_HEADERS,
     });
 
-    // 🛠 Một số API của GHL trả về data bên trong data.data
-    const tx = txDetail.data?.data || txDetail.data;
+    const txDetail = txDetailRes.data;
 
-    console.log("📦 Giao dịch chi tiết từ GHL:", tx);
+    // B3: Gọi API Get Contact
+    let contactDetail = {};
+    if (contactId) {
+      try {
+        const contactRes = await axios.get(`${GHL_API_BASE}/contacts/${contactId}`, {
+          headers: GHL_HEADERS,
+        });
+        contactDetail = contactRes.data?.contact || {};
+      } catch (e) {
+        console.warn('⚠️ Failed to fetch contact detail:', e.message);
+      }
+    }
 
     return {
-      amount: tx.amount,
-      currency: tx.currency || 'VND',
-      transactionId: tx._id,
-      orderId: tx.entityId || tx._id,
-      contactId: tx.contactId,
+      transactionId,
+      amount: txDetail.amount || amount || 0,
+      currency: txDetail.currency || currency || 'VND',
+      contactId,
+      contactName: contactDetail.name || '',
+      contactEmail: contactDetail.email || '',
+      entityId: txDetail.entityId || entityId,
       locationId: GHL_LOCATION_ID,
-      apiKey: GHL_ACCESS_TOKEN
     };
   } catch (err) {
-    console.error('❌ Lỗi khi lấy transaction GHL:', err.response?.data || err.message);
+    console.error('❌ Error in fetchLatestTransaction:', err.message);
     throw err;
   }
 }
@@ -62,9 +76,9 @@ export default async function handler(req, res) {
   }
 
   try {
-    const transaction = await fetchLatestTransaction();
-    res.status(200).json(transaction);
+    const transactionData = await fetchLatestTransaction();
+    res.status(200).json(transactionData);
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch transaction data', details: err.message });
+    res.status(500).json({ error: 'Failed to fetch transaction', details: err.message });
   }
 }
