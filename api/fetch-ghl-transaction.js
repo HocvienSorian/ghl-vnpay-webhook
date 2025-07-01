@@ -1,4 +1,3 @@
-// pages/api/fetch-ghl-transaction.js
 import axios from 'axios';
 
 const GHL_API_BASE = 'https://services.leadconnectorhq.com';
@@ -14,7 +13,7 @@ const GHL_HEADERS = {
 
 async function fetchLatestTransaction() {
   try {
-    // Bước 1: Lấy transaction mới nhất
+    // Bước 1: Lấy danh sách transaction
     const txList = await axios.get(`${GHL_API_BASE}/payments/transactions`, {
       params: {
         altId: GHL_LOCATION_ID,
@@ -26,10 +25,9 @@ async function fetchLatestTransaction() {
 
     const transaction = txList.data?.data?.[0];
     if (!transaction) throw new Error('No transactions found');
-
     const txnId = transaction._id;
 
-    // Bước 2: Lấy chi tiết transaction
+    // Bước 2: Lấy chi tiết
     const txDetail = await axios.get(`${GHL_API_BASE}/payments/transactions/${txnId}`, {
       params: {
         altId: GHL_LOCATION_ID,
@@ -38,19 +36,22 @@ async function fetchLatestTransaction() {
       headers: GHL_HEADERS,
     });
 
-    const tx = txDetail.data;
+    // 🛠 Một số API của GHL trả về data bên trong data.data
+    const tx = txDetail.data?.data || txDetail.data;
+
+    console.log("📦 Giao dịch chi tiết từ GHL:", tx);
 
     return {
       amount: tx.amount,
-      currency: tx.currency,
+      currency: tx.currency || 'VND',
       transactionId: tx._id,
-      orderId: tx.entityId,
+      orderId: tx.entityId || tx._id,
       contactId: tx.contactId,
       locationId: GHL_LOCATION_ID,
       apiKey: GHL_ACCESS_TOKEN
     };
   } catch (err) {
-    console.error('❌ Error fetching GHL transaction:', err.message);
+    console.error('❌ Lỗi khi lấy transaction GHL:', err.response?.data || err.message);
     throw err;
   }
 }
