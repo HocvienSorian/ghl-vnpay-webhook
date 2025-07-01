@@ -1,58 +1,66 @@
-import crypto from 'crypto';
-import qs from 'qs';
+// index.js
+import { generatePaymentUrl } from '../vnpay.js';
+import { fetchLatestTransaction } from '../ghl.js';
+// import GHL from '../ghl.js';
 
-const VNP_HASHSECRET = process.env.VNP_HASHSECRET;
+const GHL_ACCESS_TOKEN = process.env.GHL_ACCESS_TOKEN;
+const GHL_LOCATION_ID = process.env.GHL_LOCATION_ID;
 
-function sortObject(obj) {
-  const sorted = {};
-  const keys = Object.keys(obj).sort();
-  for (let key of keys) {
-    sorted[key] = obj[key];
+//const ghl = new GHL(GHL_ACCESS_TOKEN, GHL_LOCATION_ID);
+
+async function createInvoiceInGHL({ contactId, amount, description, payDate }) {
+  try {
+    if (!contactId || typeof contactId !== 'string') {
+      throw new Error('contactId không hợp lệ');
+    }
+
+    const response = await ghl.createInvoice({
+      contactId: String(contactId),
+      amount,
+      description,
+      payDate,
+    });
+    return response.data;
+  } catch (error) {
+    console.error('❌ Lỗi tạo invoice trong GHL:', error.response?.data || error.message);
+    throw error;
   }
-  return sorted;
 }
 
-function verifyVnpResponse(rawParams) {
-  const params = { ...rawParams };
-  const secureHash = params['vnp_SecureHash'];
-
-  delete params['vnp_SecureHash'];
-  delete params['vnp_SecureHashType'];
-
-  const sortedParams = sortObject(params);
-  const signData = qs.stringify(sortedParams, { encode: false });
-
-  const hmac = crypto.createHmac('sha512', VNP_HASHSECRET);
-  const calculatedHash = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
-
-  console.log('🔐 SecureHash từ VNPAY:', secureHash);
-  console.log('🔐 SecureHash tính lại:', calculatedHash);
-  console.log('🧾 signData:', signData);
-
-  return secureHash === calculatedHash;
+async function updateGHLContact(contactId, updateData) {
+  try {
+    if (typeof ghl.updateContact !== 'function') {
+      throw new Error('GHL class chưa có method updateContact');
+    }
+    const response = await ghl.updateContact(contactId, updateData);
+    return response.data;
+  } catch (error) {
+    console.error('❌ Lỗi cập nhật contact trong GHL:', error.response?.data || error.message);
+    throw error;
+  }
 }
 
 export default async function handler(req, res) {
-  const isGet = req.method === 'GET';
-  const data = isGet ? req.query : req.body;
-
   if (!['GET', 'POST'].includes(req.method)) {
-    return res.status(405).json({ error: 'Method Not Allowed' });
+    return res.status(405).json({ error: 'Chỉ hỗ trợ GET hoặc POST' });
   }
 
   try {
-    const { vnp_SecureHash } = data;
+    const { vnp_SecureHash, vnp_SecureHashType, ...vnpParams } = req.query;
 
-    console.log('📥 Nhận từ VNPAY:', data);
+    console.log('📥 req.query:', req.query);
+    console.log('🔐 vnp_SecureHash:', vnp_SecureHash);
 
     if (!vnp_SecureHash) {
-      return res.status(400).json({ error: 'Thiếu vnp_SecureHash' });
+      return res.status(400).json({ error: 'Thiếu tham số vnp_SecureHash' });
     }
 
-    const isValid = verifyVnpResponse(data);
+    const isValid = verifyVnpResponse({ ...vnpParams, vnp_SecureHash });
+
+    console.log('✅ Checksum hợp lệ?', isValid);
 
     if (!isValid) {
-      return res.status(400).json({ error: 'Sai chữ ký (vnp_SecureHash không khớp)' });
+      return res.status(400).json({ error: 'Checksum không hợp lệ' });
     }
 
     const {
@@ -61,32 +69,35 @@ export default async function handler(req, res) {
       vnp_OrderInfo,
       vnp_ResponseCode,
       vnp_PayDate,
-      vnp_TransactionNo,
-    } = data;
-
-    const amount = parseInt(vnp_Amount, 10) / 100;
+    } = vnpParams;
 
     if (vnp_ResponseCode !== '00') {
       return res.status(200).json({ message: 'Giao dịch thất bại từ phía VNPAY' });
     }
 
-    console.log('✅ Giao dịch thành công:', {
-      orderId: vnp_TxnRef,
+    const customerId = vnp_OrderInfo;
+    const amount = parseInt(vnp_Amount, 10) / 100;
+
+    console.log('🧾 Tạo invoice với:', { customerId, amount, vnp_TxnRef, vnp_PayDate });
+
+    await createInvoiceInGHL({
+      contactId: String(customerId),
       amount,
-      description: vnp_OrderInfo,
+      description: `Thanh toán đơn hàng #${vnp_TxnRef}`,
       payDate: vnp_PayDate,
-      vnp_TransactionNo,
     });
 
-    // Nếu là IPN thì trả JSON để ngăn retry
-    if (!isGet) {
-      return res.status(200).json({ RspCode: '00', Message: 'Success' });
-    }
+    await updateGHLContact(customerId, {
+      tags: ['Đã thanh toán VNPAY'],
+    });
 
-    // Nếu là Return URL (hiển thị cho khách)
-    return res.status(200).json({ message: '✅ Giao dịch thành công', orderId: vnp_TxnRef, amount });
-  } catch (err) {
-    console.error('❌ Lỗi xử lý VNPAY:', err);
-    return res.status(500).json({ error: 'Lỗi xử lý webhook', message: err.message });
+    return res.status(200).json({ message: '✅ Đã xử lý VNPAY IPN thành công' });
+  } catch (error) {
+    console.error('❌ Lỗi xử lý webhook chi tiết:', {
+      message: error.message,
+      stack: error.stack,
+      response: error.response?.data,
+    });
+    return res.status(500).json({ error: 'Lỗi xử lý webhook' });
   }
 }
