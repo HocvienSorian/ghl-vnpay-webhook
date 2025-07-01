@@ -6,7 +6,7 @@ import { fetchLatestTransaction } from '../ghl.js';
 const GHL_ACCESS_TOKEN = process.env.GHL_ACCESS_TOKEN;
 const GHL_LOCATION_ID = process.env.GHL_LOCATION_ID;
 
-const ghl = new GHL(GHL_ACCESS_TOKEN, GHL_LOCATION_ID);
+//const ghl = new GHL(GHL_ACCESS_TOKEN, GHL_LOCATION_ID);
 
 async function createInvoiceInGHL({ contactId, amount, description, payDate }) {
   try {
