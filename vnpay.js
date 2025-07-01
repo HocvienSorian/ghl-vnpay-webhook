@@ -1,4 +1,3 @@
-// vnpay.js
 import crypto from 'crypto';
 import qs from 'qs';
 
@@ -24,23 +23,26 @@ function getVnpConfig() {
   };
 }
 
-export function generatePaymentUrl({ amount, bankCode = '', orderInfo, orderType = 'other', locale = 'vn', ipAddr, orderId }) {
+// ✅ Tạo URL thanh toán
+function generatePaymentUrl({ amount, bankCode = '', orderInfo, orderType = 'other', locale = 'vn', ipAddr }) {
   const vnpayConfig = getVnpConfig();
 
   const date = new Date();
   const createDate = date.toISOString().replace(/[-T:Z.]/g, '').slice(0, 14);
+  const txnRef = date.toTimeString().slice(0, 8).replace(/:/g, '');
 
+  // ✅ Encode ReturnUrl trước khi ký
   const vnp_Params = {
     vnp_Version: vnpayConfig.vnp_Version,
     vnp_Command: vnpayConfig.vnp_Command,
     vnp_TmnCode: vnpayConfig.vnp_TmnCode,
     vnp_Locale: locale,
     vnp_CurrCode: vnpayConfig.vnp_CurrCode,
-    vnp_TxnRef: orderId,
+    vnp_TxnRef: txnRef,
     vnp_OrderInfo: orderInfo,
     vnp_OrderType: orderType,
     vnp_Amount: amount * 100,
-    vnp_ReturnUrl: vnpayConfig.vnp_ReturnUrl,
+    vnp_ReturnUrl: encodeURIComponent(vnpayConfig.vnp_ReturnUrl), // ✅ Sửa chỗ này
     vnp_IpAddr: ipAddr,
     vnp_CreateDate: createDate,
   };
@@ -57,8 +59,29 @@ export function generatePaymentUrl({ amount, bankCode = '', orderInfo, orderType
 
   sortedParams.vnp_SecureHash = secureHash;
 
+  // 🔍 DEBUG
   console.log("🧾 signData:", signData);
   console.log("🔐 secureHash:", secureHash);
 
   return `${vnpayConfig.vnp_Url}?${qs.stringify(sortedParams, { encode: false })}`;
 }
+
+// ✅ Kiểm tra chữ ký phản hồi từ VNPAY
+function verifyVnpResponse(queryParams) {
+  const vnpayConfig = getVnpConfig();
+  const { vnp_SecureHash, vnp_SecureHashType, ...rest } = queryParams;
+
+  const sortedParams = sortObject(rest);
+  const signData = qs.stringify(sortedParams, { encode: false });
+
+  const hmac = crypto.createHmac('sha512', vnpayConfig.vnp_HashSecret);
+  const hash = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
+
+  return hash === vnp_SecureHash;
+}
+
+export {
+  generatePaymentUrl,
+  verifyVnpResponse,
+  sortObject,
+};
