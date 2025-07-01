@@ -15,95 +15,116 @@
     <h1>🧾 Cổng Thanh Toán VNPAY</h1>
     <p id="status">⏳ Đang chờ GHL gửi thông tin thanh toán...</p>
 
-<script>
-  let paymentDataReceived = false;
+    <script>
+      let paymentDataReceived = false;
 
-  window.addEventListener("load", () => {
-    setTimeout(() => {
-      console.log("🚀 Iframe loaded – gửi custom_provider_ready");
-      window.postMessage(
-        {
-          type: "custom_provider_ready",
-          loaded: true,
-          providerId: "685ca9b987c1777791c22f89"
-        },
-        "*"
-      );
-    }, 300);
-  });
-
-  async function initiatePayment(data) {
-    const payload = {
-      amount: data.amount,
-      orderId: data.orderId || data.transactionId || "ORD_FALLBACK",
-      orderInfo: "Thanh toán từ GHL",
-      ipAddr: "", // 👈 Bổ sung nếu muốn pass từ client IP (có thể bỏ nếu server tự lấy)
-    };
-
-    // 🛑 Kiểm tra bắt buộc (không còn apiKey, contactId, transactionId ở đây)
-    const requiredFields = ['amount', 'orderId', 'orderInfo'];
-    const missingFields = requiredFields.filter(field => !payload[field]);
-
-    if (missingFields.length > 0) {
-      console.error("❌ Dữ liệu thiếu các trường bắt buộc:", missingFields);
-      alert(`❌ Thiếu dữ liệu bắt buộc: ${missingFields.join(', ')}`);
-      return;
-    }
-
-    try {
-      document.getElementById("status").innerText = "🔄 Đang xử lý giao dịch...";
-
-      const res = await fetch("/api/create-payment-url", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
+      // ✅ Gửi tín hiệu "iframe sẵn sàng"
+      window.addEventListener("load", () => {
+        setTimeout(() => {
+          console.log("🚀 Iframe loaded – gửi custom_provider_ready");
+          window.postMessage(
+            {
+              type: "custom_provider_ready",
+              loaded: true,
+              providerId: "685ca9b987c1777791c22f89"
+            },
+            "*"
+          );
+        }, 300);
       });
 
-      const result = await res.json();
-
-      if (result.paymentUrl) {
-        console.log("✅ Chuyển hướng tới VNPAY:", result.paymentUrl);
-        window.location.href = result.paymentUrl;
-      } else {
-        console.error("❌ Không nhận được paymentUrl:", result);
-        alert("❌ Không thể tạo link thanh toán.");
+      // ✅ Hàm lấy IP
+      async function getClientIp() {
+        try {
+          const res = await fetch("https://api.ipify.org?format=json");
+          const data = await res.json();
+          return data.ip;
+        } catch (err) {
+          console.warn("⚠️ Không thể lấy IP client:", err);
+          return "127.0.0.1";
+        }
       }
-    } catch (err) {
-      console.error("🔥 Lỗi gửi dữ liệu:", err);
-      alert("❌ Có lỗi xảy ra. Vui lòng thử lại.");
-    }
-  }
 
-  // Nhận dữ liệu từ GHL
-  window.addEventListener("message", async (event) => {
-    const data = event.data;
-    console.log("📥 Nhận dữ liệu từ GHL:", data);
+      // ✅ Gửi dữ liệu tạo thanh toán
+      async function initiatePayment(data) {
+        const ipAddr = await getClientIp();
 
-    if (data?.type !== "payment_initiate_props") {
-      console.warn("⚠️ Không phải payment_initiate_props:", data?.type);
-      return;
-    }
+        const payload = {
+          amount: data.amount,
+          orderId: data.orderId || data.transactionId || "ORD_FALLBACK",
+          orderInfo: "Thanh toán từ GHL",
+          transactionId: data.transactionId,
+          contactId: data.contactId || data.contact?.id,
+          locationId: data.locationId,
+          currency: data.currency || "VND",
+          ipAddr: ipAddr
+        };
 
-    paymentDataReceived = true;
+        console.log("📤 Sending data to /api/create-payment-url:", payload);
 
-    await initiatePayment(data);
-  });
+        const missingFields = Object.entries(payload)
+          .filter(([key, value]) => !value)
+          .map(([key]) => key);
 
-  // Fallback sau 3 giây nếu không có dữ liệu từ GHL
-  setTimeout(async () => {
-    if (!paymentDataReceived) {
-      console.warn("⏱ Không nhận được payment_initiate_props từ GHL, gọi API fallback...");
-      try {
-        const res = await fetch("/api/fetch-ghl-transaction");
-        const fallbackData = await res.json();
-        console.log("📦 Fallback transaction data:", fallbackData);
-        await initiatePayment(fallbackData);
-      } catch (err) {
-        console.error("❌ Lỗi khi fallback lấy giao dịch:", err);
-        document.getElementById("status").innerText = "❌ Không thể lấy dữ liệu giao dịch.";
+        if (missingFields.length > 0) {
+          console.error("❌ Dữ liệu thiếu các trường bắt buộc:", missingFields);
+          alert(`❌ Thiếu dữ liệu bắt buộc: ${missingFields.join(", ")}`);
+          return;
+        }
+
+        try {
+          document.getElementById("status").innerText = "🔄 Đang xử lý giao dịch...";
+
+          const res = await fetch("/api/create-payment-url", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          });
+
+          const result = await res.json();
+
+          if (result.paymentUrl) {
+            console.log("✅ Chuyển hướng tới VNPAY:", result.paymentUrl);
+            window.location.href = result.paymentUrl;
+          } else {
+            console.error("❌ Không nhận được paymentUrl:", result);
+            alert("❌ Không thể tạo link thanh toán.");
+          }
+        } catch (err) {
+          console.error("🔥 Lỗi gửi dữ liệu:", err);
+          alert("❌ Có lỗi xảy ra. Vui lòng thử lại.");
+        }
       }
-    }
-  }, 3000);
-</script>
+
+      // ✅ Nhận dữ liệu từ GHL
+      window.addEventListener("message", async (event) => {
+        const data = event.data;
+        console.log("📥 Nhận dữ liệu từ GHL:", data);
+
+        if (data?.type !== "payment_initiate_props") {
+          console.warn("⚠️ Không phải payment_initiate_props:", data?.type);
+          return;
+        }
+
+        paymentDataReceived = true;
+        await initiatePayment(data);
+      });
+
+      // ✅ Fallback sau 3s nếu không nhận được từ GHL
+      setTimeout(async () => {
+        if (!paymentDataReceived) {
+          console.warn("⏱ Không nhận được payment_initiate_props từ GHL, gọi API fallback...");
+          try {
+            const res = await fetch("/api/fetch-ghl-transaction");
+            const fallbackData = await res.json();
+            console.log("📦 Fallback transaction data:", fallbackData);
+            await initiatePayment(fallbackData);
+          } catch (err) {
+            console.error("❌ Lỗi khi fallback lấy giao dịch:", err);
+            document.getElementById("status").innerText = "❌ Không thể lấy dữ liệu giao dịch.";
+          }
+        }
+      }, 3000);
+    </script>
   </body>
 </html>
