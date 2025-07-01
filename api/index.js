@@ -1,5 +1,3 @@
-// index.js
-
 import crypto from 'crypto';
 import qs from 'qs';
 
@@ -18,7 +16,6 @@ function verifyVnpResponse(rawParams) {
   const params = { ...rawParams };
   const secureHash = params['vnp_SecureHash'];
 
-  // ❗️Xóa 2 trường không được tính trong chữ ký
   delete params['vnp_SecureHash'];
   delete params['vnp_SecureHashType'];
 
@@ -28,32 +25,34 @@ function verifyVnpResponse(rawParams) {
   const hmac = crypto.createHmac('sha512', VNP_HASHSECRET);
   const calculatedHash = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
 
-  console.log('✅ So sánh SecureHash:');
-  console.log('→ Từ VNPAY:', secureHash);
-  console.log('→ Tính lại:', calculatedHash);
+  console.log('🔐 SecureHash từ VNPAY:', secureHash);
+  console.log('🔐 SecureHash tính lại:', calculatedHash);
   console.log('🧾 signData:', signData);
 
   return secureHash === calculatedHash;
 }
 
 export default async function handler(req, res) {
+  const isGet = req.method === 'GET';
+  const data = isGet ? req.query : req.body;
+
   if (!['GET', 'POST'].includes(req.method)) {
-    return res.status(405).json({ error: 'Chỉ hỗ trợ GET hoặc POST' });
+    return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
   try {
-    const { vnp_SecureHash, vnp_SecureHashType, ...vnpParams } = req.query;
+    const { vnp_SecureHash } = data;
 
-    console.log('📥 Tham số nhận từ VNPAY:', req.query);
+    console.log('📥 Nhận từ VNPAY:', data);
 
     if (!vnp_SecureHash) {
       return res.status(400).json({ error: 'Thiếu vnp_SecureHash' });
     }
 
-    const isValid = verifyVnpResponse(req.query);
+    const isValid = verifyVnpResponse(data);
 
     if (!isValid) {
-      return res.status(400).json({ error: 'Chữ ký không hợp lệ (sai SecureHash)' });
+      return res.status(400).json({ error: 'Sai chữ ký (vnp_SecureHash không khớp)' });
     }
 
     const {
@@ -63,37 +62,31 @@ export default async function handler(req, res) {
       vnp_ResponseCode,
       vnp_PayDate,
       vnp_TransactionNo,
-    } = vnpParams;
+    } = data;
 
-    // ✅ Chuyển số tiền về đơn vị VND
     const amount = parseInt(vnp_Amount, 10) / 100;
 
     if (vnp_ResponseCode !== '00') {
-      console.warn(`❌ Giao dịch thất bại (Mã lỗi: ${vnp_ResponseCode})`);
       return res.status(200).json({ message: 'Giao dịch thất bại từ phía VNPAY' });
     }
 
-    // 🧾 Tại đây bạn có thể xử lý lưu trạng thái vào DB, tạo invoice, cập nhật contact...
+    console.log('✅ Giao dịch thành công:', {
+      orderId: vnp_TxnRef,
+      amount,
+      description: vnp_OrderInfo,
+      payDate: vnp_PayDate,
+      vnp_TransactionNo,
+    });
 
-    console.log('🎉 Giao dịch thành công!');
-    console.log('→ Mã đơn hàng:', vnp_TxnRef);
-    console.log('→ Mã giao dịch VNPAY:', vnp_TransactionNo);
-    console.log('→ Số tiền:', amount);
-    console.log('→ Mô tả:', vnp_OrderInfo);
-    console.log('→ Thời gian:', vnp_PayDate);
-
-    // ✅ Trả phản hồi cho VNPAY nếu đây là IPN (server-to-server)
-    if (req.url.includes('/vnpay_ipn')) {
+    // Nếu là IPN thì trả JSON để ngăn retry
+    if (!isGet) {
       return res.status(200).json({ RspCode: '00', Message: 'Success' });
     }
 
-    // ✅ Trả thông báo cho khách (nếu là Return URL)
-    return res.status(200).json({ message: 'Giao dịch thành công', orderId: vnp_TxnRef, amount });
-  } catch (error) {
-    console.error('🔥 Lỗi xử lý webhook:', {
-      message: error.message,
-      stack: error.stack,
-    });
-    return res.status(500).json({ error: 'Lỗi xử lý webhook' });
+    // Nếu là Return URL (hiển thị cho khách)
+    return res.status(200).json({ message: '✅ Giao dịch thành công', orderId: vnp_TxnRef, amount });
+  } catch (err) {
+    console.error('❌ Lỗi xử lý VNPAY:', err);
+    return res.status(500).json({ error: 'Lỗi xử lý webhook', message: err.message });
   }
 }
