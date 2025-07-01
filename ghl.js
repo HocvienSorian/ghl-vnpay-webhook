@@ -1,125 +1,52 @@
-// File: ghl.js
 import axios from 'axios';
 
-const GHL_API_BASE = 'https://services.leadconnectorhq.com/payments';
-const GHL_CONTACT_BASE = 'https://services.leadconnectorhq.com/contacts';
-const GHL_INVOICE_URL = 'https://services.leadconnectorhq.com/invoices/';
-const API_VERSION = '2021-07-28';
+const GHL_API_BASE = 'https://services.leadconnectorhq.com';
+const GHL_ACCESS_TOKEN = process.env.GHL_ACCESS_TOKEN;
+const GHL_LOCATION_ID = process.env.GHL_LOCATION_ID;
+const GHL_ALT_TYPE = process.env.GHL_ALT_TYPE || 'location';
+const GHL_HEADERS = {
+  Authorization: `Bearer ${GHL_ACCESS_TOKEN}`,
+  Version: '2021-07-28',
+  Accept: 'application/json',
+};
 
-class GHL {
-  constructor(token, altId, altType = 'location') {
-    this.token = token;
-    this.altId = altId;
-    this.altType = altType;
-  }
+export async function fetchLatestTransaction() {
+  try {
+    const txList = await axios.get(`${GHL_API_BASE}/payments/transactions`, {
+      params: {
+        altId: GHL_LOCATION_ID,
+        altType: GHL_ALT_TYPE,
+        limit: 1,
+      },
+      headers: GHL_HEADERS,
+    });
 
-  get headers() {
+    const transaction = txList.data?.data?.[0];
+    if (!transaction) throw new Error('No transactions found');
+
+    const txnId = transaction._id;
+
+    const txDetail = await axios.get(`${GHL_API_BASE}/payments/transactions/${txnId}`, {
+      params: {
+        altId: GHL_LOCATION_ID,
+        altType: GHL_ALT_TYPE,
+      },
+      headers: GHL_HEADERS,
+    });
+
+    const tx = txDetail.data;
+
     return {
-      Authorization: `Bearer ${this.token}`,
-      Version: API_VERSION,
-      Accept: 'application/json',
-      'Content-Type': 'application/json'
+      amount: tx.amount,
+      currency: tx.currency,
+      transactionId: tx._id,
+      orderId: tx.entityId,
+      contactId: tx.contactId,
+      locationId: GHL_LOCATION_ID,
+      apiKey: GHL_ACCESS_TOKEN
     };
-  }
-
-  // ✅ Tạo invoice chi tiết theo chuẩn GHL
-  async createInvoice({ contactId, amount, description, payDate }) {
-    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-
-    const payload = {
-      altId: this.altId,
-      altType: this.altType,
-      name: `Hóa Đơn ${contactId}`,
-      issueDate: today,
-      currency: 'VND',
-      contactDetails: {
-        id: contactId
-      },
-      businessDetails: {
-        name: 'Học Viện Sorian',
-        taxId: '000000000',
-        address: '19 Võ Văn Tần, Phường 6, Quận 3, Thành Phố Hồ Chí Minh'
-      },
-      items: [
-        {
-          name: description,
-          quantity: 1,
-          unitPrice: amount
-        }
-      ]
-    };
-
-    return axios.post(GHL_INVOICE_URL, payload, { headers: this.headers });
-  }
-
-  // ✅ Cập nhật thông tin contact
-  async updateContact(contactId, updateData) {
-    const url = `${GHL_CONTACT_BASE}/${contactId}`;
-    return axios.put(url, updateData, { headers: this.headers });
-  }
-
-  // Các hàm khác (giữ nguyên)
-  async createIntegrationProvider(data) {
-    const url = `${GHL_API_BASE}/integrations/provider/whitelabel`;
-    const payload = {
-      altId: this.altId,
-      altType: this.altType,
-      ...data
-    };
-    return axios.post(url, payload, { headers: this.headers });
-  }
-
-  async listOrders() {
-    const url = `${GHL_API_BASE}/orders`;
-    const params = { altId: this.altId, altType: this.altType };
-    return axios.get(url, { headers: this.headers, params });
-  }
-
-  async getOrderById(orderId) {
-    const url = `${GHL_API_BASE}/orders/${orderId}`;
-    const params = { altId: this.altId, altType: this.altType };
-    return axios.get(url, { headers: this.headers, params });
-  }
-
-  async createFulfillment(orderId, fulfillmentData) {
-    const url = `${GHL_API_BASE}/orders/${orderId}/fulfillments`;
-    const data = {
-      altId: this.altId,
-      altType: this.altType,
-      ...fulfillmentData
-    };
-    return axios.post(url, data, { headers: this.headers });
-  }
-
-  async listFulfillments(orderId) {
-    const url = `${GHL_API_BASE}/orders/${orderId}/fulfillments`;
-    const params = { altId: this.altId, altType: this.altType };
-    return axios.get(url, { headers: this.headers, params });
-  }
-
-  async listTransactions() {
-    const url = `${GHL_API_BASE}/transactions`;
-    const params = { altId: this.altId, altType: this.altType };
-    return axios.get(url, { headers: this.headers, params });
-  }
-
-  async getTransactionById(transactionId) {
-    const url = `${GHL_API_BASE}/transactions/${transactionId}`;
-    const params = { altId: this.altId, altType: this.altType };
-    return axios.get(url, { headers: this.headers, params });
-  }
-
-  async listSubscriptions() {
-    const url = `${GHL_API_BASE}/subscriptions`;
-    const params = { altId: this.altId, altType: this.altType };
-    return axios.get(url, { headers: this.headers, params });
-  }
-
-  async getSubscriptionById(subscriptionId) {
-    const url = `${GHL_API_BASE}/subscriptions/${subscriptionId}`;
-    const params = { altId: this.altId, altType: this.altType };
-    return axios.get(url, { headers: this.headers, params });
+  } catch (err) {
+    console.error('❌ Error fetching GHL transaction:', err);
+    throw err;
   }
 }
-
-export default GHL;
