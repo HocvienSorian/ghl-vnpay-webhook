@@ -16,46 +16,43 @@
     <p>⏳ Đang chờ GHL gửi thông tin thanh toán...</p>
 
     <script>
-      // ✅ Gửi tín hiệu "iframe sẵn sàng" cho GHL sau khi load xong
+      // ✅ Gửi tín hiệu iframe sẵn sàng
       window.addEventListener("load", () => {
         setTimeout(() => {
-          console.log("🚀 Iframe loaded – gửi custom_provider_ready");
+          console.log("🚀 Gửi postMessage custom_provider_ready");
           window.postMessage(
             {
               type: "custom_provider_ready",
               loaded: true,
-              providerId: "685ca9b987c1777791c22f89"
+              providerId: "685ca9b987c1777791c22f89" // cập nhật đúng ID của bạn
             },
             "*"
           );
-        }, 300); // ⏱ Trễ 300ms để chắc chắn iframe đã attach
+        }, 300); // Trễ nhẹ để chắc chắn iframe đã render
       });
 
-      // ✅ Nhận dữ liệu thanh toán từ GHL
+      // ✅ Lắng nghe postMessage từ GHL
       window.addEventListener("message", async (event) => {
         const data = event.data;
-        console.log("📥 Nhận dữ liệu từ GHL:", data);
+        console.log("📥 Nhận từ GHL:", data);
 
-        // 👉 Kiểm tra type để đảm bảo đúng luồng
         if (data?.type !== "payment_initiate_props") {
-          console.warn("⚠️ Bỏ qua message không phải payment_initiate_props:", data?.type);
+          console.warn("⚠️ Không phải dữ liệu thanh toán:", data?.type);
           return;
         }
 
-        // 👉 Kiểm tra dữ liệu bắt buộc
+        // Kiểm tra các trường cần thiết
         if (
           !data.amount ||
           !data.transactionId ||
           !data.apiKey ||
           !data.contact?.id
         ) {
-          alert("❌ Thiếu thông tin thanh toán từ GHL.");
-          console.error("❌ Thiếu dữ liệu:", data);
+          alert("❌ Thiếu thông tin thanh toán.");
           return;
         }
 
         try {
-          // 🔁 Gửi request đến backend để tạo URL VNPAY
           const res = await fetch("/api/create-payment-url", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -74,19 +71,19 @@
           const result = await res.json();
 
           if (result.paymentUrl) {
-            console.log("✅ Chuyển hướng tới VNPAY:", result.paymentUrl);
+            console.log("✅ Redirect tới VNPAY:", result.paymentUrl);
             window.location.href = result.paymentUrl;
           } else {
-            console.error("❌ Không nhận được paymentUrl:", result);
-            alert("❌ Không thể tạo link thanh toán.");
+            console.error("❌ Không có paymentUrl:", result);
+            alert("Không thể tạo link thanh toán.");
           }
         } catch (err) {
-          console.error("🔥 Lỗi gửi dữ liệu:", err);
-          alert("❌ Có lỗi xảy ra. Vui lòng thử lại.");
+          console.error("🔥 Lỗi tạo link thanh toán:", err);
+          alert("Có lỗi xảy ra, vui lòng thử lại.");
         }
       });
 
-      console.log("🛠 DEBUG: Đang chờ GHL gửi postMessage...");
+      console.log("🛠 DEBUG: chờ GHL gửi payment_initiate_props...");
     </script>
   </body>
 </html>
