@@ -15,95 +15,103 @@
     <h1>🧾 Cổng Thanh Toán VNPAY</h1>
     <p id="status">⏳ Đang chờ GHL gửi thông tin thanh toán...</p>
 
-    <script>
-      let paymentDataReceived = false;
+<script>
+  let paymentDataReceived = false;
 
-      // ✅ Gửi tín hiệu "iframe sẵn sàng" cho GHL
-      window.addEventListener("load", () => {
-        setTimeout(() => {
-          console.log("🚀 Iframe loaded – gửi custom_provider_ready");
-          window.postMessage(
-            {
-              type: "custom_provider_ready",
-              loaded: true,
-              providerId: "685ca9b987c1777791c22f89"
-            },
-            "*"
-          );
-        }, 300);
+  window.addEventListener("load", () => {
+    setTimeout(() => {
+      console.log("🚀 Iframe loaded – gửi custom_provider_ready");
+      window.postMessage(
+        {
+          type: "custom_provider_ready",
+          loaded: true,
+          providerId: "685ca9b987c1777791c22f89"
+        },
+        "*"
+      );
+    }, 300);
+  });
+
+  async function initiatePayment(data) {
+    const payload = {
+      amount: data.amount,
+      orderId: data.orderId || data.transactionId || "ORD_FALLBACK",
+      orderInfo: "Thanh toán từ GHL",
+      transactionId: data.transactionId,
+      contactId: data.contactId || data.contact?.id,
+      locationId: data.locationId,
+      currency: data.currency || "VND",
+      apiKey: data.apiKey
+    };
+
+    // 🔍 Log kỹ dữ liệu trước khi gửi
+    console.log("📤 Sending data to /api/create-payment-url:", payload);
+
+    // 🛑 Kiểm tra bắt buộc
+    const missingFields = Object.entries(payload)
+      .filter(([key, value]) => !value)
+      .map(([key]) => key);
+
+    if (missingFields.length > 0) {
+      console.error("❌ Dữ liệu thiếu các trường bắt buộc:", missingFields);
+      alert(`❌ Thiếu dữ liệu bắt buộc: ${missingFields.join(', ')}`);
+      return;
+    }
+
+    try {
+      document.getElementById("status").innerText = "🔄 Đang xử lý giao dịch...";
+
+      const res = await fetch("/api/create-payment-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
       });
 
-      // ✅ Hàm gửi request tạo link thanh toán
-      async function initiatePayment(data) {
-        try {
-          document.getElementById("status").innerText = "🔄 Đang xử lý giao dịch...";
+      const result = await res.json();
 
-          const res = await fetch("/api/create-payment-url", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              amount: data.amount,
-              orderId: data.orderId || data.transactionId,
-              orderInfo: "Thanh toán từ GHL",
-              transactionId: data.transactionId,
-              contactId: data.contactId || data.contact?.id,
-              locationId: data.locationId,
-              currency: data.currency || "VND",
-              apiKey: data.apiKey
-            })
-          });
-
-          const result = await res.json();
-
-          if (result.paymentUrl) {
-            console.log("✅ Chuyển hướng tới VNPAY:", result.paymentUrl);
-            window.location.href = result.paymentUrl;
-          } else {
-            console.error("❌ Không nhận được paymentUrl:", result);
-            alert("❌ Không thể tạo link thanh toán.");
-          }
-        } catch (err) {
-          console.error("🔥 Lỗi gửi dữ liệu:", err);
-          alert("❌ Có lỗi xảy ra. Vui lòng thử lại.");
-        }
+      if (result.paymentUrl) {
+        console.log("✅ Chuyển hướng tới VNPAY:", result.paymentUrl);
+        window.location.href = result.paymentUrl;
+      } else {
+        console.error("❌ Không nhận được paymentUrl:", result);
+        alert("❌ Không thể tạo link thanh toán.");
       }
+    } catch (err) {
+      console.error("🔥 Lỗi gửi dữ liệu:", err);
+      alert("❌ Có lỗi xảy ra. Vui lòng thử lại.");
+    }
+  }
 
-      // ✅ Nghe dữ liệu từ GHL
-      window.addEventListener("message", async (event) => {
-        const data = event.data;
-        console.log("📥 Nhận dữ liệu từ GHL:", data);
+  // Nhận dữ liệu từ GHL
+  window.addEventListener("message", async (event) => {
+    const data = event.data;
+    console.log("📥 Nhận dữ liệu từ GHL:", data);
 
-        if (data?.type !== "payment_initiate_props") {
-          console.warn("⚠️ Không phải payment_initiate_props:", data?.type);
-          return;
-        }
+    if (data?.type !== "payment_initiate_props") {
+      console.warn("⚠️ Không phải payment_initiate_props:", data?.type);
+      return;
+    }
 
-        paymentDataReceived = true;
+    paymentDataReceived = true;
 
-        if (!data.amount || !data.transactionId || !data.apiKey || !data.contact?.id) {
-          alert("❌ Thiếu thông tin thanh toán từ GHL.");
-          console.error("❌ Thiếu dữ liệu:", data);
-          return;
-        }
+    await initiatePayment(data);
+  });
 
-        await initiatePayment(data);
-      });
-
-      // ✅ Fallback nếu không nhận được gì từ GHL sau 3 giây
-      setTimeout(async () => {
-        if (!paymentDataReceived) {
-          console.warn("⏱ Không nhận được payment_initiate_props từ GHL, gọi API fallback...");
-          try {
-            const res = await fetch("/api/fetch-ghl-transaction");
-            const fallbackData = await res.json();
-            console.log("📦 Fallback transaction data:", fallbackData);
-            await initiatePayment(fallbackData);
-          } catch (err) {
-            console.error("❌ Lỗi khi fallback lấy giao dịch:", err);
-            document.getElementById("status").innerText = "❌ Không thể lấy dữ liệu giao dịch.";
-          }
-        }
-      }, 3000);
-    </script>
+  // Fallback sau 3 giây nếu không có dữ liệu từ GHL
+  setTimeout(async () => {
+    if (!paymentDataReceived) {
+      console.warn("⏱ Không nhận được payment_initiate_props từ GHL, gọi API fallback...");
+      try {
+        const res = await fetch("/api/fetch-ghl-transaction");
+        const fallbackData = await res.json();
+        console.log("📦 Fallback transaction data:", fallbackData);
+        await initiatePayment(fallbackData);
+      } catch (err) {
+        console.error("❌ Lỗi khi fallback lấy giao dịch:", err);
+        document.getElementById("status").innerText = "❌ Không thể lấy dữ liệu giao dịch.";
+      }
+    }
+  }, 3000);
+</script>
   </body>
 </html>
