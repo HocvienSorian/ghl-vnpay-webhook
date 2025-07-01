@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Kết quả thanh toán</title>
+  </head>
+  <body>
+    <h2>🔄 Đang xử lý kết quả thanh toán...</h2>
+    <script>
+      const params = new URLSearchParams(window.location.search);
+      const vnp_SecureHash = params.get('vnp_SecureHash');
+      if (!vnp_SecureHash) {
+        document.body.innerHTML = "<h3>❌ Thiếu thông tin kết quả thanh toán</h3>";
+      } else {
+        fetch('/api/vnpay_return', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(Object.fromEntries(params.entries()))
+        })
+          .then(res => res.json())
+          .then(result => {
+            document.body.innerHTML = `<h3>${result.message}</h3>`;
+          })
+          .catch(err => {
+            console.error(err);
+            document.body.innerHTML = "<h3>❌ Lỗi xử lý kết quả thanh toán</h3>";
+          });
+      }
+    </script>
+  </body>
+</html>
