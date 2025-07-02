@@ -2,7 +2,7 @@
 import crypto from 'crypto';
 import qs from 'qs';
 
-// ✅ Sắp xếp object theo key tăng dần
+// ✅ Sắp xếp tham số theo thứ tự alphabet tăng dần
 function sortObject(obj) {
   const sorted = {};
   const keys = Object.keys(obj).sort();
@@ -12,7 +12,7 @@ function sortObject(obj) {
   return sorted;
 }
 
-// ✅ Load cấu hình từ .env
+// ✅ Đọc cấu hình từ biến môi trường
 function getVnpConfig() {
   const requiredEnvs = ['VNP_TMNCODE', 'VNP_HASHSECRET', 'VNP_URL', 'VNP_RETURNURL'];
   const missing = requiredEnvs.filter((k) => !process.env[k]);
@@ -32,7 +32,7 @@ function getVnpConfig() {
   };
 }
 
-// ✅ Hàm tạo URL thanh toán
+// ✅ Tạo URL thanh toán VNPAY
 function generatePaymentUrl({
   amount,
   orderInfo,
@@ -57,7 +57,7 @@ function generatePaymentUrl({
     vnp_OrderInfo: orderInfo,
     vnp_OrderType: orderType,
     vnp_Locale: locale,
-    vnp_ReturnUrl: encodeURIComponent(config.vnp_ReturnUrl), // ✅ Encode trước khi ký
+    vnp_ReturnUrl: config.vnp_ReturnUrl, // ✅ KHÔNG encode
     vnp_IpAddr: ipAddr,
     vnp_CreateDate: createDate,
   };
@@ -71,19 +71,17 @@ function generatePaymentUrl({
 
   const hmac = crypto.createHmac('sha512', config.vnp_HashSecret);
   const secureHash = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
-
   sortedParams.vnp_SecureHash = secureHash;
 
-  // ✅ Log DEBUG
+  // ✅ Debug log
   console.log('🧾 signData:', signData);
   console.log('🔐 secureHash:', secureHash);
   console.log('🌐 Final redirect URL:', `${config.vnp_Url}?${qs.stringify(sortedParams, { encode: false })}`);
 
-  // ✅ Trả về URL cuối
   return `${config.vnp_Url}?${qs.stringify(sortedParams, { encode: false })}`;
 }
 
-// ✅ Xác minh chữ ký phản hồi từ VNPAY (IPN hoặc Return)
+// ✅ Xác minh chữ ký phản hồi từ VNPAY (IPN hoặc Return URL)
 function verifyVnpResponse(queryParams) {
   const config = getVnpConfig();
   const { vnp_SecureHash, vnp_SecureHashType, ...rest } = queryParams;
@@ -103,7 +101,7 @@ function verifyVnpResponse(queryParams) {
   return hash === vnp_SecureHash;
 }
 
-// ✅ Export
+// ✅ Xuất các hàm
 export {
   generatePaymentUrl,
   verifyVnpResponse,
