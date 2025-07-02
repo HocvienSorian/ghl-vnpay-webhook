@@ -42,7 +42,7 @@ function generatePaymentUrl({ amount, bankCode = '', orderInfo, orderType = 'oth
     vnp_OrderInfo: orderInfo,
     vnp_OrderType: orderType,
     vnp_Amount: amount * 100,
-    vnp_ReturnUrl: encodeURIComponent(vnpayConfig.vnp_ReturnUrl), // ✅ Sửa chỗ này
+    vnp_ReturnUrl: vnpayConfig.vnp_ReturnUrl, // ✅ Sửa chỗ này
     vnp_IpAddr: ipAddr,
     vnp_CreateDate: createDate,
   };
