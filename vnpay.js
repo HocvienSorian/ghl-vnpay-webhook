@@ -2,7 +2,7 @@
 import crypto from 'crypto';
 import qs from 'qs';
 
-// ✅ Hàm sắp xếp object theo key tăng dần (bắt buộc đúng thứ tự VNPAY yêu cầu)
+// ✅ Sắp xếp object theo key tăng dần
 function sortObject(obj) {
   const sorted = {};
   const keys = Object.keys(obj).sort();
@@ -12,7 +12,7 @@ function sortObject(obj) {
   return sorted;
 }
 
-// ✅ Đọc cấu hình từ biến môi trường
+// ✅ Load biến môi trường cần thiết
 function getVnpConfig() {
   const requiredEnvs = ['VNP_TMNCODE', 'VNP_HASHSECRET', 'VNP_URL', 'VNP_RETURNURL'];
   const missing = requiredEnvs.filter((k) => !process.env[k]);
@@ -32,9 +32,9 @@ function getVnpConfig() {
   };
 }
 
-// ✅ Hàm tạo URL thanh toán
+// ✅ Hàm tạo URL thanh toán VNPAY
 function generatePaymentUrl({
-  amount,            // số tiền chưa nhân 100
+  amount,
   orderInfo,
   ipAddr,
   bankCode = '',
@@ -51,13 +51,13 @@ function generatePaymentUrl({
     vnp_Version: config.vnp_Version,
     vnp_Command: config.vnp_Command,
     vnp_TmnCode: config.vnp_TmnCode,
-    vnp_Amount: amount * 100, // nhân 100
+    vnp_Amount: amount * 100,
     vnp_CurrCode: config.vnp_CurrCode,
     vnp_TxnRef: txnRef,
     vnp_OrderInfo: orderInfo,
     vnp_OrderType: orderType,
     vnp_Locale: locale,
-    vnp_ReturnUrl: config.vnp_ReturnUrl, // giữ nguyên, không encode ở đây
+    vnp_ReturnUrl: config.vnp_ReturnUrl, // ❗KHÔNG encode
     vnp_IpAddr: ipAddr,
     vnp_CreateDate: createDate,
   };
@@ -66,13 +66,12 @@ function generatePaymentUrl({
     vnp_Params.vnp_BankCode = bankCode;
   }
 
-  // ✅ Tạo chuỗi dữ liệu để ký
   const sortedParams = sortObject(vnp_Params);
   const signData = qs.stringify(sortedParams, { encode: false });
 
-  // ✅ Tạo chữ ký HMAC SHA512
   const hmac = crypto.createHmac('sha512', config.vnp_HashSecret);
   const secureHash = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
+
   sortedParams.vnp_SecureHash = secureHash;
 
   // ✅ Log debug
@@ -80,7 +79,6 @@ function generatePaymentUrl({
   console.log('🔐 secureHash:', secureHash);
   console.log('🌐 Final redirect URL:', `${config.vnp_Url}?${qs.stringify(sortedParams, { encode: false })}`);
 
-  // ✅ Trả về URL đầy đủ KHÔNG encode lại vnp_ReturnUrl
   return `${config.vnp_Url}?${qs.stringify(sortedParams, { encode: false })}`;
 }
 
@@ -104,7 +102,7 @@ function verifyVnpResponse(queryParams) {
   return hash === vnp_SecureHash;
 }
 
-// ✅ Export các hàm
+// ✅ Export
 export {
   generatePaymentUrl,
   verifyVnpResponse,
