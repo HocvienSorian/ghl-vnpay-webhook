@@ -1,7 +1,8 @@
 // vnpay.js
 import crypto from 'crypto';
+import qs from 'qs';
 
-// ✅ Hàm sắp xếp object theo key (a → z)
+// ✅ Hàm sắp xếp object theo key tăng dần
 function sortObject(obj) {
   const sorted = {};
   const keys = Object.keys(obj).sort();
@@ -11,15 +12,14 @@ function sortObject(obj) {
   return sorted;
 }
 
-// ✅ Hàm tự build query string không encode
-function buildQueryString(params) {
-  return Object.entries(params)
-    .map(([key, val]) => `${key}=${val}`)
-    .join('&');
-}
-
-// ✅ Load biến môi trường cấu hình VNPAY
+// ✅ Load cấu hình VNPAY từ biến môi trường
 function getVnpConfig() {
+  const requiredEnvs = ['VNP_TMNCODE', 'VNP_HASHSECRET', 'VNP_URL', 'VNP_RETURNURL'];
+  const missing = requiredEnvs.filter((k) => !process.env[k]);
+  if (missing.length > 0) {
+    throw new Error(`Thiếu biến môi trường: ${missing.join(', ')}`);
+  }
+
   return {
     vnp_Version: '2.1.0',
     vnp_Command: 'pay',
@@ -32,32 +32,33 @@ function getVnpConfig() {
   };
 }
 
-// ✅ Tạo URL thanh toán
+// ✅ Hàm tạo URL thanh toán
 function generatePaymentUrl({
-  amount,
-  bankCode = '',
+  amount,            // số tiền chưa nhân 100
   orderInfo,
+  ipAddr,
+  bankCode = '',
   orderType = 'other',
   locale = 'vn',
-  ipAddr,
 }) {
-  const vnpayConfig = getVnpConfig();
+  const config = getVnpConfig();
 
   const date = new Date();
   const createDate = date.toISOString().replace(/[-T:Z.]/g, '').slice(0, 14);
+
   const txnRef = date.toTimeString().slice(0, 8).replace(/:/g, '');
 
   const vnp_Params = {
-    vnp_Version: vnpayConfig.vnp_Version,
-    vnp_Command: vnpayConfig.vnp_Command,
-    vnp_TmnCode: vnpayConfig.vnp_TmnCode,
-    vnp_Locale: locale,
-    vnp_CurrCode: vnpayConfig.vnp_CurrCode,
+    vnp_Version: config.vnp_Version,
+    vnp_Command: config.vnp_Command,
+    vnp_TmnCode: config.vnp_TmnCode,
+    vnp_Amount: amount * 100, // ⚠️ nhân 100 ở đây
+    vnp_CurrCode: config.vnp_CurrCode,
     vnp_TxnRef: txnRef,
-    vnp_OrderInfo: orderInfo, // ❗Không encode
+    vnp_OrderInfo: orderInfo, // KHÔNG encode ở đây
     vnp_OrderType: orderType,
-    vnp_Amount: amount * 100,
-    vnp_ReturnUrl: vnpayConfig.vnp_ReturnUrl, // ❗Không encode
+    vnp_Locale: locale,
+    vnp_ReturnUrl: config.vnp_ReturnUrl, // KHÔNG encode ở đây
     vnp_IpAddr: ipAddr,
     vnp_CreateDate: createDate,
   };
@@ -66,32 +67,39 @@ function generatePaymentUrl({
     vnp_Params.vnp_BankCode = bankCode;
   }
 
+  // ✅ Sắp xếp và ký dữ liệu
   const sortedParams = sortObject(vnp_Params);
-  const signData = buildQueryString(sortedParams);
+  const signData = qs.stringify(sortedParams, { encode: false });
 
-  const hmac = crypto.createHmac('sha512', vnpayConfig.vnp_HashSecret);
+  const hmac = crypto.createHmac('sha512', config.vnp_HashSecret);
   const secureHash = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
 
   sortedParams.vnp_SecureHash = secureHash;
 
-  // 🔍 DEBUG
+  // ✅ Debug log
   console.log('🧾 signData:', signData);
   console.log('🔐 secureHash:', secureHash);
+  console.log('🌐 Full URL:', `${config.vnp_Url}?${qs.stringify(sortedParams, { encode: false })}`);
 
-  // ✅ Trả về URL thanh toán không encode (để giữ đúng cấu trúc)
-  return `${vnpayConfig.vnp_Url}?${buildQueryString(sortedParams)}`;
+  return `${config.vnp_Url}?${qs.stringify(sortedParams, { encode: false })}`;
 }
 
-// ✅ Xác minh phản hồi từ VNPAY (ReturnURL hoặc IPN)
+// ✅ Kiểm tra chữ ký phản hồi từ VNPAY (IPN hoặc Return)
 function verifyVnpResponse(queryParams) {
-  const vnpayConfig = getVnpConfig();
+  const config = getVnpConfig();
   const { vnp_SecureHash, vnp_SecureHashType, ...rest } = queryParams;
 
   const sortedParams = sortObject(rest);
-  const signData = buildQueryString(sortedParams);
+  const signData = qs.stringify(sortedParams, { encode: false });
 
-  const hmac = crypto.createHmac('sha512', vnpayConfig.vnp_HashSecret);
+  const hmac = crypto.createHmac('sha512', config.vnp_HashSecret);
   const hash = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
+
+  console.log('📥 VERIFY RESPONSE:');
+  console.log('↪️ signData:', signData);
+  console.log('↪️ secureHash nhận được:', vnp_SecureHash);
+  console.log('↪️ secureHash tính toán:', hash);
+  console.log('✅ Hợp lệ?', hash === vnp_SecureHash);
 
   return hash === vnp_SecureHash;
 }
