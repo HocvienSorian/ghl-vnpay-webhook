@@ -12,7 +12,7 @@ function sortObject(obj) {
   return sorted;
 }
 
-// ✅ Load biến môi trường cần thiết
+// ✅ Load cấu hình từ .env
 function getVnpConfig() {
   const requiredEnvs = ['VNP_TMNCODE', 'VNP_HASHSECRET', 'VNP_URL', 'VNP_RETURNURL'];
   const missing = requiredEnvs.filter((k) => !process.env[k]);
@@ -32,7 +32,7 @@ function getVnpConfig() {
   };
 }
 
-// ✅ Hàm tạo URL thanh toán VNPAY
+// ✅ Hàm tạo URL thanh toán
 function generatePaymentUrl({
   amount,
   orderInfo,
@@ -57,7 +57,7 @@ function generatePaymentUrl({
     vnp_OrderInfo: orderInfo,
     vnp_OrderType: orderType,
     vnp_Locale: locale,
-    vnp_ReturnUrl: config.vnp_ReturnUrl, // ❗KHÔNG encode
+    vnp_ReturnUrl: encodeURIComponent(config.vnp_ReturnUrl), // ✅ Encode trước khi ký
     vnp_IpAddr: ipAddr,
     vnp_CreateDate: createDate,
   };
@@ -74,15 +74,16 @@ function generatePaymentUrl({
 
   sortedParams.vnp_SecureHash = secureHash;
 
-  // ✅ Log debug
+  // ✅ Log DEBUG
   console.log('🧾 signData:', signData);
   console.log('🔐 secureHash:', secureHash);
   console.log('🌐 Final redirect URL:', `${config.vnp_Url}?${qs.stringify(sortedParams, { encode: false })}`);
 
+  // ✅ Trả về URL cuối
   return `${config.vnp_Url}?${qs.stringify(sortedParams, { encode: false })}`;
 }
 
-// ✅ Hàm kiểm tra chữ ký phản hồi từ VNPAY
+// ✅ Xác minh chữ ký phản hồi từ VNPAY (IPN hoặc Return)
 function verifyVnpResponse(queryParams) {
   const config = getVnpConfig();
   const { vnp_SecureHash, vnp_SecureHashType, ...rest } = queryParams;
