@@ -1,34 +1,90 @@
-// create payment url
-import { generatePaymentUrl } from '../vnpay.js';
+import crypto from 'crypto';
 
-export default function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Chỉ hỗ trợ phương thức POST' });
-  }
-
-  const { amount, orderId, orderInfo, ipAddr } = req.body;
-
-  if (!amount || !orderId || !orderInfo || !ipAddr) {
-    return res.status(400).json({ error: 'Thiếu tham số bắt buộc' });
-  }
-
-  try {
-    // ✅ DEBUG: kiểm tra biến môi trường có tồn tại không
-    if (!process.env.VNP_HASHSECRET || !process.env.VNP_TMNCODE || !process.env.VNP_URL) {
-      console.error('❌ ENV thiếu hoặc chưa được load');
-      return res.status(500).json({ error: 'Thiếu biến môi trường cấu hình VNPAY' });
-    }
-
-    // ✅ Gọi hàm tạo URL
-    const paymentUrl = generatePaymentUrl({ amount, orderId, orderInfo, ipAddr });
-
-    // ✅ In log URL đã tạo để kiểm tra chữ ký
-    console.log('>>> ✅ Generated paymentUrl:', paymentUrl);
-
-    return res.status(200).json({ paymentUrl });
-  } catch (err) {
-    // ✅ Log chi tiết lỗi
-    console.error('🔥 Lỗi khi tạo URL thanh toán:', err);
-    return res.status(500).json({ error: 'Lỗi nội bộ khi tạo URL thanh toán', detail: err.message });
-  }
+// ✅ Tự viết thay cho qs để tránh lỗi encode space thành "+"
+function buildQueryString(params) {
+  return Object.entries(params)
+    .map(([key, val]) => `${key}=${val}`)
+    .join('&');
 }
+
+function sortObject(obj) {
+  const sorted = {};
+  const keys = Object.keys(obj).sort();
+  for (let key of keys) {
+    sorted[key] = obj[key];
+  }
+  return sorted;
+}
+
+function getVnpConfig() {
+  return {
+    vnp_Version: '2.1.0',
+    vnp_Command: 'pay',
+    vnp_TmnCode: process.env.VNP_TMNCODE,
+    vnp_HashSecret: process.env.VNP_HASHSECRET,
+    vnp_Url: process.env.VNP_URL,
+    vnp_ReturnUrl: process.env.VNP_RETURNURL,
+    vnp_CurrCode: 'VND',
+    vnp_Locale: 'vn',
+  };
+}
+
+function generatePaymentUrl({ amount, bankCode = '', orderInfo, orderType = 'other', locale = 'vn', ipAddr }) {
+  const vnpayConfig = getVnpConfig();
+
+  const date = new Date();
+  const createDate = date.toISOString().replace(/[-T:Z.]/g, '').slice(0, 14);
+  const txnRef = date.toTimeString().slice(0, 8).replace(/:/g, '');
+
+  const vnp_Params = {
+    vnp_Version: vnpayConfig.vnp_Version,
+    vnp_Command: vnpayConfig.vnp_Command,
+    vnp_TmnCode: vnpayConfig.vnp_TmnCode,
+    vnp_Locale: locale,
+    vnp_CurrCode: vnpayConfig.vnp_CurrCode,
+    vnp_TxnRef: txnRef,
+    vnp_OrderInfo: orderInfo,
+    vnp_OrderType: orderType,
+    vnp_Amount: amount * 100,
+    vnp_ReturnUrl: vnpayConfig.vnp_ReturnUrl, // ❗KHÔNG encode
+    vnp_IpAddr: ipAddr,
+    vnp_CreateDate: createDate,
+  };
+
+  if (bankCode) {
+    vnp_Params['vnp_BankCode'] = bankCode;
+  }
+
+  const sortedParams = sortObject(vnp_Params);
+  const signData = buildQueryString(sortedParams);
+
+  const hmac = crypto.createHmac('sha512', vnpayConfig.vnp_HashSecret);
+  const secureHash = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
+
+  sortedParams.vnp_SecureHash = secureHash;
+
+  // 🔍 Debug
+  console.log('🧾 signData:', signData);
+  console.log('🔐 secureHash:', secureHash);
+
+  return `${vnpayConfig.vnp_Url}?${buildQueryString(sortedParams)}`;
+}
+
+function verifyVnpResponse(queryParams) {
+  const vnpayConfig = getVnpConfig();
+  const { vnp_SecureHash, vnp_SecureHashType, ...rest } = queryParams;
+
+  const sortedParams = sortObject(rest);
+  const signData = buildQueryString(sortedParams);
+
+  const hmac = crypto.createHmac('sha512', vnpayConfig.vnp_HashSecret);
+  const hash = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
+
+  return hash === vnp_SecureHash;
+}
+
+export {
+  generatePaymentUrl,
+  verifyVnpResponse,
+  sortObject,
+};
