@@ -43,7 +43,7 @@ function generatePaymentUrl({ amount, bankCode = '', orderInfo, orderType = 'oth
     vnp_Locale: locale,
     vnp_CurrCode: vnpayConfig.vnp_CurrCode,
     vnp_TxnRef: txnRef,
-    vnp_OrderInfo: orderInfo,
+    vnp_OrderInfo: encodeURIComponent(orderInfo),
     vnp_OrderType: orderType,
     vnp_Amount: amount * 100,
     vnp_ReturnUrl: vnpayConfig.vnp_ReturnUrl, // ❗KHÔNG encode
