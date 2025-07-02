@@ -1,12 +1,8 @@
+// vnpay.js
 import crypto from 'crypto';
+import qs from 'qs';
 
-// ✅ Tự viết thay cho qs để tránh lỗi encode space thành "+"
-function buildQueryString(params) {
-  return Object.entries(params)
-    .map(([key, val]) => `${key}=${val}`)
-    .join('&');
-}
-
+// ✅ Hàm sắp xếp object theo key
 function sortObject(obj) {
   const sorted = {};
   const keys = Object.keys(obj).sort();
@@ -16,6 +12,7 @@ function sortObject(obj) {
   return sorted;
 }
 
+// ✅ Load cấu hình VNPAY từ biến môi trường
 function getVnpConfig() {
   return {
     vnp_Version: '2.1.0',
@@ -29,7 +26,15 @@ function getVnpConfig() {
   };
 }
 
-function generatePaymentUrl({ amount, bankCode = '', orderInfo, orderType = 'other', locale = 'vn', ipAddr }) {
+// ✅ Hàm tạo URL thanh toán
+function generatePaymentUrl({
+  amount,
+  bankCode = '',
+  orderInfo,
+  orderType = 'other',
+  locale = 'vn',
+  ipAddr,
+}) {
   const vnpayConfig = getVnpConfig();
 
   const date = new Date();
@@ -43,39 +48,41 @@ function generatePaymentUrl({ amount, bankCode = '', orderInfo, orderType = 'oth
     vnp_Locale: locale,
     vnp_CurrCode: vnpayConfig.vnp_CurrCode,
     vnp_TxnRef: txnRef,
-    vnp_OrderInfo: encodeURIComponent(orderInfo),
+    vnp_OrderInfo: orderInfo, // ❗KHÔNG encode
     vnp_OrderType: orderType,
     vnp_Amount: amount * 100,
-    vnp_ReturnUrl: vnpayConfig.vnp_ReturnUrl, // ❗KHÔNG encode
+    vnp_ReturnUrl: encodeURIComponent(vnpayConfig.vnp_ReturnUrl), // ❗PHẢI encode
     vnp_IpAddr: ipAddr,
     vnp_CreateDate: createDate,
   };
 
   if (bankCode) {
-    vnp_Params['vnp_BankCode'] = bankCode;
+    vnp_Params.vnp_BankCode = bankCode;
   }
 
   const sortedParams = sortObject(vnp_Params);
-  const signData = buildQueryString(sortedParams);
+  const signData = qs.stringify(sortedParams, { encode: false });
 
   const hmac = crypto.createHmac('sha512', vnpayConfig.vnp_HashSecret);
   const secureHash = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
 
   sortedParams.vnp_SecureHash = secureHash;
 
-  // 🔍 Debug
+  // 🔍 Log debug để kiểm tra
   console.log('🧾 signData:', signData);
   console.log('🔐 secureHash:', secureHash);
 
-  return `${vnpayConfig.vnp_Url}?${buildQueryString(sortedParams)}`;
+  // ✅ Build final URL
+  return `${vnpayConfig.vnp_Url}?${qs.stringify(sortedParams, { encode: false })}`;
 }
 
+// ✅ Kiểm tra chữ ký phản hồi từ VNPAY (IPN hoặc Return)
 function verifyVnpResponse(queryParams) {
   const vnpayConfig = getVnpConfig();
   const { vnp_SecureHash, vnp_SecureHashType, ...rest } = queryParams;
 
   const sortedParams = sortObject(rest);
-  const signData = buildQueryString(sortedParams);
+  const signData = qs.stringify(sortedParams, { encode: false });
 
   const hmac = crypto.createHmac('sha512', vnpayConfig.vnp_HashSecret);
   const hash = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
