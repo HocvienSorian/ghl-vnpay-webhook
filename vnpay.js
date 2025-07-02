@@ -56,7 +56,7 @@ function generatePaymentUrl({
     vnp_TxnRef: txnRef,
     vnp_OrderInfo: orderInfo, // ❗Không encode
     vnp_OrderType: orderType,
-    vnp_Amount: amount,
+    vnp_Amount: amount * 100,
     vnp_ReturnUrl: vnpayConfig.vnp_ReturnUrl, // ❗Không encode
     vnp_IpAddr: ipAddr,
     vnp_CreateDate: createDate,
