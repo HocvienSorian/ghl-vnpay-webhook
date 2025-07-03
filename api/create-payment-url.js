@@ -25,7 +25,7 @@ export default async function handler(req, res) {
   try {
     const { amount, orderId, contactId, ipAddr } = req.body;
 
-    // 1️⃣ Gọi GHL tạo paymentLink
+    // 1️⃣ Tạo paymentLink từ GHL
     const ghlRes = await axios.post(
       `${GHL_API_BASE}/payments/links/`,
       {
@@ -61,3 +61,4 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Failed to create payment URL', details: err.message });
   }
 }
+
