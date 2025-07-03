@@ -1,4 +1,3 @@
-// ======= vnpay.js =======
 import crypto from 'crypto';
 import qs from 'qs';
 
@@ -42,10 +41,10 @@ function generatePaymentUrl({ amount, orderInfo, ipAddr, bankCode = '', orderTyp
     vnp_Amount: amount * 100,
     vnp_CurrCode: config.vnp_CurrCode,
     vnp_TxnRef: txnRef,
-    vnp_OrderInfo: orderInfo,
+    vnp_OrderInfo: encodeURIComponent(orderInfo), // ✅ encode trước khi ký
     vnp_OrderType: orderType,
     vnp_Locale: locale,
-    vnp_ReturnUrl: encodeURIComponent(config.vnp_ReturnUrl), // ✅ encode khi ký
+    vnp_ReturnUrl: encodeURIComponent(config.vnp_ReturnUrl), // ✅ encode trước khi ký
     vnp_IpAddr: ipAddr,
     vnp_CreateDate: createDate,
   };
