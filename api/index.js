@@ -27,28 +27,32 @@ export default async function handler(req, res) {
     const payDate = vnpParams.vnp_PayDate;
     const contactId = vnpParams.vnp_OrderInfo;
 
-    if (!contactId || contactId.length < 10) {
-      console.error('❌ contactId không hợp lệ:', contactId);
+    if (!contactId) {
+      console.error('❌ contactId không hợp lệ hoặc không tồn tại:', contactId);
       return res.status(400).json({ error: 'contactId không hợp lệ, không thể tạo hóa đơn' });
     }
 
-    console.log('🧾 Gửi createInvoiceInGHL:', { contactId, amount, payDate });
+    console.log('🧾 Tạo hóa đơn cho contactId:', contactId);
 
-    const invoiceRes = await createInvoiceInGHL({
-      contactId,
-      amount,
-      description: `Thanh toán đơn hàng #${vnpParams.vnp_TxnRef}`,
-      payDate,
-    });
+    try {
+      const invoiceRes = await createInvoiceInGHL({
+        contactId,
+        amount,
+        description: `Thanh toán đơn hàng #${vnpParams.vnp_TxnRef}`,
+        payDate,
+      });
+      console.log('✅ Invoice created:', invoiceRes);
+    } catch (apiErr) {
+      console.error('❌ GHL API trả về lỗi:', apiErr.response?.status, apiErr.response?.data);
+      throw apiErr;
+    }
 
-    console.log('✅ Invoice created:', invoiceRes);
-
-    console.log('🏷️ Cập nhật tag contact');
+    console.log('🏷️ Thêm tag cho contact');
     await updateGHLContact(contactId, {
       tags: ['Đã thanh toán VNPAY'],
     });
 
-    return res.status(200).json({ message: '✅ Đã xử lý VNPAY IPN thành công' });
+    return res.status(200).json({ message: '✅ Xử lý IPN thành công và đã cập nhật GHL' });
   } catch (err) {
     console.error('❌ Lỗi xử lý webhook:', err);
     const statusCode = err.response?.status || 500;
