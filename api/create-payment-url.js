@@ -13,7 +13,7 @@ const GHL_HEADERS = {
 };
 
 function extractInvoiceIdFromUrl(url) {
-  const match = url.match(/invoice\\/([a-zA-Z0-9]+)/);
+  const match = url.match(/invoice\/([a-zA-Z0-9]+)/); // ✅ Fix regex
   return match ? match[1] : null;
 }
 
