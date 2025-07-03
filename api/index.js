@@ -25,28 +25,34 @@ export default async function handler(req, res) {
 
     const amount = parseInt(vnpParams.vnp_Amount, 10) / 100;
     const payDate = vnpParams.vnp_PayDate;
+    const contactId = vnpParams.vnp_OrderInfo;
 
-    console.log('🧾 Gửi createInvoiceInGHL:', {
-      contactId: vnpParams.vnp_OrderInfo,
-      amount,
-      payDate,
-    });
+    if (!contactId || contactId.length < 10) {
+      console.error('❌ contactId không hợp lệ:', contactId);
+      return res.status(400).json({ error: 'contactId không hợp lệ, không thể tạo hóa đơn' });
+    }
 
-    await createInvoiceInGHL({
-      contactId: vnpParams.vnp_OrderInfo,
+    console.log('🧾 Gửi createInvoiceInGHL:', { contactId, amount, payDate });
+
+    const invoiceRes = await createInvoiceInGHL({
+      contactId,
       amount,
       description: `Thanh toán đơn hàng #${vnpParams.vnp_TxnRef}`,
       payDate,
     });
 
+    console.log('✅ Invoice created:', invoiceRes);
+
     console.log('🏷️ Cập nhật tag contact');
-    await updateGHLContact(vnpParams.vnp_OrderInfo, {
+    await updateGHLContact(contactId, {
       tags: ['Đã thanh toán VNPAY'],
     });
 
     return res.status(200).json({ message: '✅ Đã xử lý VNPAY IPN thành công' });
   } catch (err) {
     console.error('❌ Lỗi xử lý webhook:', err);
-    return res.status(500).json({ error: 'Lỗi xử lý webhook', details: err.message });
+    const statusCode = err.response?.status || 500;
+    const message = err.response?.data?.message || err.message;
+    return res.status(statusCode).json({ error: 'Lỗi xử lý webhook', details: message });
   }
 }
