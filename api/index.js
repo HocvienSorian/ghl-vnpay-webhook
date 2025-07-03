@@ -1,5 +1,5 @@
 import { verifyVnpResponse } from '../vnpay.js';
-import { fetchInvoiceIdByContact, updateInvoiceInGHL } from '../ghl.js';
+import { updateInvoiceInGHL } from '../ghl.js';
 
 const GHL_LOCATION_ID = process.env.GHL_LOCATION_ID;
 
@@ -27,18 +27,11 @@ export default async function handler(req, res) {
 
     const amount = parseInt(vnpParams.vnp_Amount, 10) / 100;
     const payDate = vnpParams.vnp_PayDate;
-    const contactId = vnpParams.vnp_OrderInfo;
+    const invoiceId = vnpParams.vnp_OrderInfo;
 
-    if (!contactId) {
-      console.error('❌ contactId không hợp lệ hoặc không tồn tại:', contactId);
-      return res.status(400).json({ error: 'contactId không hợp lệ, không thể cập nhật hóa đơn' });
-    }
-
-    console.log('🔍 Tìm invoiceId bằng contactId:', contactId);
-    const invoiceId = await fetchInvoiceIdByContact(contactId);
     if (!invoiceId) {
-      console.error('❌ Không tìm thấy invoiceId cho contactId:', contactId);
-      return res.status(404).json({ error: 'Không tìm thấy hóa đơn để cập nhật' });
+      console.error('❌ Không tìm thấy invoiceId trong vnp_OrderInfo');
+      return res.status(400).json({ error: 'Không tìm thấy invoiceId để cập nhật' });
     }
 
     const invoiceData = {
@@ -48,7 +41,6 @@ export default async function handler(req, res) {
       title: 'INVOICE',
       currency: 'VND',
       description: `Thanh toán đơn hàng #${vnpParams.vnp_TxnRef}`,
-      contactId,
       issueDate: payDate,
       dueDate: payDate,
       liveMode: true,
