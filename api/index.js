@@ -1,6 +1,6 @@
 // pages/api/index.js
 import { verifyVnpResponse } from '../vnpay.js';
-import { createInvoiceInGHL, updateGHLContact } from '../ghl.js';
+import fetchLatestTransaction from '../ghl.js';
 
 export default async function handler(req, res) {
   if (!['GET', 'POST'].includes(req.method)) {
