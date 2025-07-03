@@ -37,6 +37,12 @@ function generatePaymentUrl({
     .toISOString().replace(/[-T:Z.]/g, '').slice(0, 14);
   const txnRef = `${now.getTime()}`.slice(-8);
 
+  // 🟡 Double-encode ReturnUrl để “chiều” Sandbox
+  const isSandbox = cfg.vnp_Url.includes('sandbox');
+  const returnUrlForSign = isSandbox
+    ? encodeURIComponent(encodeURIComponent(cfg.vnp_ReturnUrl))
+    : cfg.vnp_ReturnUrl;
+
   const vnp_Params = {
     vnp_Version: cfg.vnp_Version,
     vnp_Command: cfg.vnp_Command,
@@ -47,7 +53,7 @@ function generatePaymentUrl({
     vnp_OrderInfo: orderInfo,
     vnp_OrderType: orderType,
     vnp_Amount: amount * 100,
-    vnp_ReturnUrl: cfg.vnp_ReturnUrl, // FORCE RAW
+    vnp_ReturnUrl: returnUrlForSign,
     vnp_IpAddr: ipAddr,
     vnp_CreateDate: createDate,
     vnp_ExpireDate: expireDate,
@@ -56,7 +62,7 @@ function generatePaymentUrl({
   if (bankCode) vnp_Params['vnp_BankCode'] = bankCode;
 
   const sortedParams = sortObject(vnp_Params);
-  const signData = qs.stringify(sortedParams, { encode: false }); // 🚨 FORCE RAW VALUES
+  const signData = qs.stringify(sortedParams, { encode: false });
   const hmac = crypto.createHmac('sha512', cfg.vnp_HashSecret);
   const secureHash = hmac.update(signData, 'utf-8').digest('hex');
   sortedParams.vnp_SecureHash = secureHash;
@@ -64,7 +70,7 @@ function generatePaymentUrl({
   console.log("🧾 signData:", signData);
   console.log("🔐 secureHash:", secureHash);
 
-  // ✅ Encode ReturnUrl for redirect only
+  // ✅ Single-encode ReturnUrl for redirect
   sortedParams.vnp_ReturnUrl = encodeURIComponent(cfg.vnp_ReturnUrl);
 
   return `${cfg.vnp_Url}?${qs.stringify(sortedParams, { encode: false })}`;
@@ -74,7 +80,12 @@ function verifyVnpResponse(queryParams) {
   const cfg = getVnpConfig();
   const { vnp_SecureHash, vnp_SecureHashType, ...rest } = queryParams;
 
-  if (rest.vnp_ReturnUrl) rest.vnp_ReturnUrl = decodeURIComponent(rest.vnp_ReturnUrl);
+  const isSandbox = cfg.vnp_Url.includes('sandbox');
+  if (isSandbox && rest.vnp_ReturnUrl) {
+    rest.vnp_ReturnUrl = encodeURIComponent(decodeURIComponent(rest.vnp_ReturnUrl));
+  } else if (rest.vnp_ReturnUrl) {
+    rest.vnp_ReturnUrl = decodeURIComponent(rest.vnp_ReturnUrl);
+  }
 
   const sortedParams = sortObject(rest);
   const signData = qs.stringify(sortedParams, { encode: false });
