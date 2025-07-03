@@ -1,13 +1,6 @@
 // vnpay.js
 import crypto from 'crypto';
 
-// ✅ RFC3986 encode chuẩn cho VNPAY
-function rfc3986EncodeURIComponent(str) {
-  return encodeURIComponent(str).replace(/[!'()*]/g, c =>
-    '%' + c.charCodeAt(0).toString(16).toUpperCase()
-  );
-}
-
 // ✅ Sắp xếp tham số theo thứ tự alphabet tăng dần
 function sortObject(obj) {
   const sorted = {};
@@ -68,7 +61,7 @@ function generatePaymentUrl({
     vnp_OrderInfo: orderInfo,
     vnp_OrderType: orderType,
     vnp_Locale: locale,
-    vnp_ReturnUrl: config.vnp_ReturnUrl,
+    vnp_ReturnUrl: config.vnp_ReturnUrl, // RAW không encode
     vnp_IpAddr: ipAddr,
     vnp_CreateDate: createDate,
     vnp_ExpireDate: expireDate,
@@ -80,9 +73,9 @@ function generatePaymentUrl({
 
   const sortedParams = sortObject(vnp_Params);
 
-  // ✅ Build signData (encode VALUE chuẩn RFC3986)
+  // ✅ Build signData (raw value - không encode)
   const signData = Object.keys(sortedParams).map(key =>
-    `${key}=${rfc3986EncodeURIComponent(sortedParams[key])}`
+    `${key}=${sortedParams[key]}`
   ).join('&');
 
   const hmac = crypto.createHmac('sha512', config.vnp_HashSecret);
@@ -92,7 +85,7 @@ function generatePaymentUrl({
   console.log('🧾 signData:', signData);
   console.log('🔐 secureHash:', secureHash);
 
-  // ✅ Build final redirect URL (encode toàn bộ key & value)
+  // ✅ Build final URL (encode key & value)
   const queryString = Object.keys(sortedParams).map(key =>
     `${encodeURIComponent(key)}=${encodeURIComponent(sortedParams[key])}`
   ).join('&');
@@ -108,8 +101,9 @@ function verifyVnpResponse(queryParams) {
   delete params.vnp_SecureHashType;
 
   const sortedParams = sortObject(params);
+
   const signData = Object.keys(sortedParams).map(key =>
-    `${key}=${rfc3986EncodeURIComponent(sortedParams[key])}`
+    `${key}=${sortedParams[key]}`
   ).join('&');
 
   const hmac = crypto.createHmac('sha512', config.vnp_HashSecret);
