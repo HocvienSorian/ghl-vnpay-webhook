@@ -14,16 +14,16 @@ export default function handler(req, res) {
   }
 
   try {
-    const paymentUrl = generatePaymentUrl({ amount, orderInfo, ipAddr });
+    const paymentUrl = generatePaymentUrl({
+      amount,
+      orderInfo: `${orderInfo} - OrderID:${orderId}`, // 👈 Append orderId
+      ipAddr
+    });
 
     console.log('✅ Generated paymentUrl:', paymentUrl);
     return res.status(200).json({ paymentUrl });
   } catch (err) {
     console.error('🔥 Lỗi khi tạo URL thanh toán:', err);
-
-    return res.status(500).json({
-      error: 'Lỗi nội bộ khi tạo URL thanh toán',
-      detail: err.message,
-    });
+    return res.status(500).json({ error: 'Lỗi tạo URL thanh toán', detail: err.message });
   }
 }
