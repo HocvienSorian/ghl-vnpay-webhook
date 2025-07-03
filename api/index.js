@@ -20,24 +20,35 @@ export default async function handler(req, res) {
     }
 
     if (vnpParams.vnp_ResponseCode !== '00') {
-      return res.status(200).json({ message: 'Giao dịch thất bại' });
+      return res.status(200).json({ message: 'Giao dịch thất bại từ VNPAY' });
+    }
+
+    // ✅ Fix: lấy contactId từ OrderInfo nếu hợp lệ, fallback entityId nếu cần
+    const contactId = vnpParams.vnp_OrderInfo || vnpParams.vnp_TransactionNo;
+    if (!contactId || contactId.startsWith('ThanhtoantuGHL')) {
+      throw new Error('❌ contactId không hợp lệ, cần ID thực từ GHL');
     }
 
     const amount = parseInt(vnpParams.vnp_Amount, 10) / 100;
+    const payDate = vnpParams.vnp_PayDate;
+
+    console.log('🧾 Gửi createInvoiceInGHL:', { contactId, amount, payDate });
+
     await createInvoiceInGHL({
-      contactId: vnpParams.vnp_OrderInfo,
+      contactId,
       amount,
       description: `Thanh toán đơn hàng #${vnpParams.vnp_TxnRef}`,
-      payDate: vnpParams.vnp_PayDate,
+      payDate,
     });
 
-    await updateGHLContact(vnpParams.vnp_OrderInfo, {
+    console.log('🏷️ Cập nhật tag contact');
+    await updateGHLContact(contactId, {
       tags: ['Đã thanh toán VNPAY'],
     });
 
-    return res.status(200).json({ message: '✅ Giao dịch thành công' });
+    return res.status(200).json({ message: '✅ Đã xử lý VNPAY IPN thành công' });
   } catch (err) {
     console.error('❌ Lỗi xử lý webhook:', err);
-    return res.status(500).json({ error: 'Lỗi xử lý webhook' });
+    return res.status(500).json({ error: 'Lỗi xử lý webhook', details: err.message });
   }
 }
