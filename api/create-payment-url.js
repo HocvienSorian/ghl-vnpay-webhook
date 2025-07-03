@@ -16,7 +16,7 @@ export default function handler(req, res) {
   try {
     const paymentUrl = generatePaymentUrl({
       amount,
-      orderInfo: `${orderInfo} - OrderID:${orderId}`, // 👈 Append orderId
+      orderInfo: `${orderInfo} - OrderID:${orderId}`,
       ipAddr
     });
 
