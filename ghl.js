@@ -1,52 +1,86 @@
-import axios from 'axios';
+import crypto from 'crypto';
+import qs from 'qs';
 
-const GHL_API_BASE = 'https://services.leadconnectorhq.com';
-const GHL_ACCESS_TOKEN = process.env.GHL_ACCESS_TOKEN;
-const GHL_LOCATION_ID = process.env.GHL_LOCATION_ID;
-const GHL_ALT_TYPE = process.env.GHL_ALT_TYPE || 'location';
-const GHL_HEADERS = {
-  Authorization: `Bearer ${GHL_ACCESS_TOKEN}`,
-  Version: '2021-07-28',
-  Accept: 'application/json',
-};
-
-export async function fetchLatestTransaction() {
-  try {
-    const txList = await axios.get(`${GHL_API_BASE}/payments/transactions`, {
-      params: {
-        altId: GHL_LOCATION_ID,
-        altType: GHL_ALT_TYPE,
-        limit: 1,
-      },
-      headers: GHL_HEADERS,
-    });
-
-    const transaction = txList.data?.data?.[0];
-    if (!transaction) throw new Error('No transactions found');
-
-    const txnId = transaction._id;
-
-    const txDetail = await axios.get(`${GHL_API_BASE}/payments/transactions/${txnId}`, {
-      params: {
-        altId: GHL_LOCATION_ID,
-        altType: GHL_ALT_TYPE,
-      },
-      headers: GHL_HEADERS,
-    });
-
-    const tx = txDetail.data;
-
-    return {
-      amount: tx.amount,
-      currency: tx.currency,
-      transactionId: tx._id,
-      orderId: tx.entityId,
-      contactId: tx.contactId,
-      locationId: GHL_LOCATION_ID,
-      apiKey: GHL_ACCESS_TOKEN
-    };
-  } catch (err) {
-    console.error('❌ Error fetching GHL transaction:', err);
-    throw err;
+// 🔥 Sắp xếp key theo alphabet
+function sortObject(obj) {
+  const sorted = {};
+  const keys = Object.keys(obj).sort();
+  for (let key of keys) {
+    sorted[key] = obj[key];
   }
+  return sorted;
 }
+
+function getVnpConfig() {
+  const requiredEnvs = ['VNP_TMNCODE', 'VNP_HASHSECRET', 'VNP_URL', 'VNP_RETURNURL'];
+  const missing = requiredEnvs.filter((k) => !process.env[k]);
+  if (missing.length > 0) {
+    throw new Error(`❌ Thiếu biến môi trường: ${missing.join(', ')}`);
+  }
+  return {
+    vnp_Version: '2.1.0',
+    vnp_Command: 'pay',
+    vnp_TmnCode: process.env.VNP_TMNCODE,
+    vnp_HashSecret: process.env.VNP_HASHSECRET,
+    vnp_Url: process.env.VNP_URL,
+    vnp_ReturnUrl: process.env.VNP_RETURNURL,
+    vnp_CurrCode: 'VND',
+    vnp_Locale: 'vn',
+  };
+}
+
+function generatePaymentUrl({ amount, orderInfo, ipAddr, bankCode = '', orderType = 'other', locale = 'vn' }) {
+  const config = getVnpConfig();
+  const date = new Date();
+  const createDate = date.toISOString().replace(/[-T:Z.]/g, '').slice(0, 14);
+  const txnRef = date.getTime().toString().slice(-8);
+
+  const vnp_Params = {
+    vnp_Version: config.vnp_Version,
+    vnp_Command: config.vnp_Command,
+    vnp_TmnCode: config.vnp_TmnCode,
+    vnp_Amount: amount * 100,
+    vnp_CurrCode: config.vnp_CurrCode,
+    vnp_TxnRef: txnRef,
+    vnp_OrderInfo: orderInfo,
+    vnp_OrderType: orderType,
+    vnp_Locale: locale,
+    vnp_ReturnUrl: encodeURIComponent(config.vnp_ReturnUrl), // ✅ Encode để ký
+    vnp_IpAddr: ipAddr,
+    vnp_CreateDate: createDate,
+  };
+
+  if (bankCode) vnp_Params.vnp_BankCode = bankCode;
+
+  const sortedParams = sortObject(vnp_Params);
+  const signData = qs.stringify(sortedParams, { encode: false });
+  const hmac = crypto.createHmac('sha512', config.vnp_HashSecret);
+  const secureHash = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
+  sortedParams.vnp_SecureHash = secureHash;
+
+  console.log('🧾 signData:', signData);
+  console.log('🔐 secureHash:', secureHash);
+
+  return `${config.vnp_Url}?${qs.stringify(sortedParams, { encode: false })}`;
+}
+
+function verifyVnpResponse(queryParams) {
+  const config = getVnpConfig();
+  const { vnp_SecureHash, vnp_SecureHashType, ...rest } = queryParams;
+
+  // 🚨 Không encode lại vnp_ReturnUrl
+  const sortedParams = sortObject(rest);
+  const signData = qs.stringify(sortedParams, { encode: false });
+
+  const hmac = crypto.createHmac('sha512', config.vnp_HashSecret);
+  const hash = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
+
+  console.log('📥 VERIFY RESPONSE');
+  console.log('↪️ signData:', signData);
+  console.log('↪️ secureHash nhận được:', vnp_SecureHash);
+  console.log('↪️ secureHash tính toán:', hash);
+
+  return hash === vnp_SecureHash;
+}
+
+export { generatePaymentUrl, verifyVnpResponse, sortObject };
