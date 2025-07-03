@@ -1,62 +1,46 @@
-import { verifyVnpResponse } from '../vnpay.js';
-import { createInvoiceInGHL, updateGHLContact, fetchLatestTransaction } from '../ghl.js';
+import axios from 'axios';
 
-export default async function handler(req, res) {
-  if (!['GET', 'POST'].includes(req.method)) {
-    return res.status(405).json({ error: 'Chỉ hỗ trợ GET hoặc POST' });
-  }
+const GHL_API_BASE = 'https://services.leadconnectorhq.com';
+const GHL_ACCESS_TOKEN = process.env.GHL_ACCESS_TOKEN;
+const GHL_LOCATION_ID = process.env.GHL_LOCATION_ID;
 
+const GHL_HEADERS = {
+  Authorization: `Bearer ${GHL_ACCESS_TOKEN}`,
+  Version: '2021-07-28',
+  Accept: 'application/json',
+  'Content-Type': 'application/json'
+};
+
+export async function fetchInvoiceIdByContact(contactId) {
   try {
-    const { vnp_SecureHash, ...vnpParams } = req.query;
-    console.log('📥 VNPAY Callback Params:', vnpParams);
-
-    if (!vnp_SecureHash) {
-      return res.status(400).json({ error: 'Thiếu vnp_SecureHash' });
-    }
-
-    const isValid = verifyVnpResponse({ ...vnpParams, vnp_SecureHash });
-    if (!isValid) {
-      return res.status(400).json({ error: 'Chữ ký không hợp lệ' });
-    }
-
-    if (vnpParams.vnp_ResponseCode !== '00') {
-      return res.status(200).json({ message: 'Giao dịch thất bại từ VNPAY' });
-    }
-
-    const amount = parseInt(vnpParams.vnp_Amount, 10) / 100;
-    const payDate = vnpParams.vnp_PayDate;
-    const contactId = vnpParams.vnp_OrderInfo;
-
-    if (!contactId) {
-      console.error('❌ contactId không hợp lệ hoặc không tồn tại:', contactId);
-      return res.status(400).json({ error: 'contactId không hợp lệ, không thể tạo hóa đơn' });
-    }
-
-    console.log('🧾 Tạo hóa đơn cho contactId:', contactId);
-
-    try {
-      const invoiceRes = await createInvoiceInGHL({
+    const res = await axios.get(`${GHL_API_BASE}/invoices/`, {
+      params: {
+        altId: GHL_LOCATION_ID,
+        altType: 'location',
         contactId,
-        amount,
-        description: `Thanh toán đơn hàng #${vnpParams.vnp_TxnRef}`,
-        payDate,
-      });
-      console.log('✅ Invoice created:', invoiceRes);
-    } catch (apiErr) {
-      console.error('❌ GHL API trả về lỗi:', apiErr.response?.status, apiErr.response?.data);
-      throw apiErr;
-    }
-
-    console.log('🏷️ Thêm tag cho contact');
-    await updateGHLContact(contactId, {
-      tags: ['Đã thanh toán VNPAY'],
+        limit: 1,
+        offset: 0,
+        paymentMode: 'live'
+      },
+      headers: GHL_HEADERS
     });
 
-    return res.status(200).json({ message: '✅ Xử lý IPN thành công và đã cập nhật GHL' });
+    const invoice = res.data?.data?.[0];
+    return invoice?._id || null;
   } catch (err) {
-    console.error('❌ Lỗi xử lý webhook:', err);
-    const statusCode = err.response?.status || 500;
-    const message = err.response?.data?.message || err.message;
-    return res.status(statusCode).json({ error: 'Lỗi xử lý webhook', details: message });
+    console.error('❌ Lỗi fetchInvoiceIdByContact:', err.message);
+    return null;
+  }
+}
+
+export async function updateInvoiceInGHL(invoiceId, data) {
+  try {
+    const res = await axios.put(`${GHL_API_BASE}/invoices/${invoiceId}`, data, {
+      headers: GHL_HEADERS
+    });
+    return res.data;
+  } catch (err) {
+    console.error('❌ Lỗi updateInvoiceInGHL:', err.message);
+    throw err;
   }
 }
