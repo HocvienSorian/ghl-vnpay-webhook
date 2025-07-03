@@ -1,7 +1,7 @@
+// ======= vnpay.js =======
 import crypto from 'crypto';
 import qs from 'qs';
 
-// 🔥 Sắp xếp key theo alphabet
 function sortObject(obj) {
   const sorted = {};
   const keys = Object.keys(obj).sort();
@@ -45,7 +45,7 @@ function generatePaymentUrl({ amount, orderInfo, ipAddr, bankCode = '', orderTyp
     vnp_OrderInfo: orderInfo,
     vnp_OrderType: orderType,
     vnp_Locale: locale,
-    vnp_ReturnUrl: encodeURIComponent(config.vnp_ReturnUrl), // ✅ Encode để ký
+    vnp_ReturnUrl: encodeURIComponent(config.vnp_ReturnUrl), // ✅ encode khi ký
     vnp_IpAddr: ipAddr,
     vnp_CreateDate: createDate,
   };
@@ -67,8 +67,6 @@ function generatePaymentUrl({ amount, orderInfo, ipAddr, bankCode = '', orderTyp
 function verifyVnpResponse(queryParams) {
   const config = getVnpConfig();
   const { vnp_SecureHash, vnp_SecureHashType, ...rest } = queryParams;
-
-  // 🚨 Không encode lại vnp_ReturnUrl
   const sortedParams = sortObject(rest);
   const signData = qs.stringify(sortedParams, { encode: false });
 
