@@ -1,34 +1,63 @@
-// pages/api/create-payment-url.js
+import axios from 'axios';
 import { generatePaymentUrl } from '../vnpay.js';
 
-export default function handler(req, res) {
+const GHL_API_BASE = 'https://services.leadconnectorhq.com';
+const GHL_ACCESS_TOKEN = process.env.GHL_ACCESS_TOKEN;
+const GHL_LOCATION_ID = process.env.GHL_LOCATION_ID;
+
+const GHL_HEADERS = {
+  Authorization: `Bearer ${GHL_ACCESS_TOKEN}`,
+  Version: '2021-07-28',
+  Accept: 'application/json',
+  'Content-Type': 'application/json'
+};
+
+function extractInvoiceIdFromUrl(url) {
+  const match = url.match(/invoice\\/([a-zA-Z0-9]+)/);
+  return match ? match[1] : null;
+}
+
+export default async function handler(req, res) {
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Chỉ hỗ trợ phương thức POST' });
-  }
-
-  const { amount, orderId, orderInfo, ipAddr } = req.body;
-
-  if (!amount || !orderId || !orderInfo || !ipAddr) {
-    console.warn('⚠ Thiếu tham số:', { amount, orderId, orderInfo, ipAddr });
-    return res.status(400).json({ error: 'Thiếu tham số bắt buộc' });
+    return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
   try {
+    const { amount, orderId, contactId, ipAddr } = req.body;
+
+    // 1️⃣ Gọi GHL tạo paymentLink
+    const ghlRes = await axios.post(
+      `${GHL_API_BASE}/payments/links/`,
+      {
+        amount,
+        contactId,
+        altId: GHL_LOCATION_ID,
+        altType: 'location',
+        description: `Thanh toán đơn hàng #${orderId}`,
+        liveMode: true
+      },
+      { headers: GHL_HEADERS }
+    );
+
+    const paymentLink = ghlRes.data?.paymentLink;
+    const invoiceId = extractInvoiceIdFromUrl(paymentLink);
+
+    if (!invoiceId) {
+      throw new Error('❌ Không tìm thấy invoiceId trong paymentLink');
+    }
+
+    console.log('📦 Lấy invoiceId từ paymentLink:', invoiceId);
+
+    // 2️⃣ Tạo paymentUrl VNPAY, gắn invoiceId vào orderInfo
     const paymentUrl = generatePaymentUrl({
       amount,
-      orderInfo,
-      ipAddr,
-      orderType: 'other',
-      locale: 'vn',
+      orderInfo: invoiceId,
+      ipAddr
     });
 
-    console.log('✅ Generated paymentUrl:', paymentUrl);
     return res.status(200).json({ paymentUrl });
   } catch (err) {
-    console.error('🔥 Lỗi khi tạo URL thanh toán:', err);
-    return res.status(500).json({
-      error: 'Lỗi nội bộ khi tạo URL thanh toán',
-      detail: err.message,
-    });
+    console.error('❌ Lỗi create-payment-url:', err);
+    return res.status(500).json({ error: 'Failed to create payment URL', details: err.message });
   }
 }
