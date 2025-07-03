@@ -3,7 +3,7 @@ import qs from 'qs';
 
 function sortObject(obj) {
   const sorted = {};
-  const keys = Object.keys(obj).map(k => k.toLowerCase()).sort();
+  const keys = Object.keys(obj).sort();
   for (let key of keys) {
     sorted[key] = obj[key];
   }
@@ -30,9 +30,7 @@ function getVnpConfig() {
 
 function generatePaymentUrl({ amount, orderInfo, ipAddr, bankCode = '', orderType = 'other', locale = 'vn' }) {
   const config = getVnpConfig();
-
   const date = new Date();
-  date.setHours(date.getHours() + 7);
   const createDate = date.toISOString().replace(/[-T:Z.]/g, '').slice(0, 14);
   const txnRef = date.getTime().toString().slice(-8);
 
@@ -43,10 +41,10 @@ function generatePaymentUrl({ amount, orderInfo, ipAddr, bankCode = '', orderTyp
     vnp_Amount: amount * 100,
     vnp_CurrCode: config.vnp_CurrCode,
     vnp_TxnRef: txnRef,
-    vnp_OrderInfo: orderInfo,
+    vnp_OrderInfo: encodeURIComponent(orderInfo), // ✅ encode trước khi ký
     vnp_OrderType: orderType,
     vnp_Locale: locale,
-    vnp_ReturnUrl: config.vnp_ReturnUrl,
+    vnp_ReturnUrl: encodeURIComponent(config.vnp_ReturnUrl), // ✅ encode trước khi ký
     vnp_IpAddr: ipAddr,
     vnp_CreateDate: createDate,
   };
@@ -54,8 +52,7 @@ function generatePaymentUrl({ amount, orderInfo, ipAddr, bankCode = '', orderTyp
   if (bankCode) vnp_Params.vnp_BankCode = bankCode;
 
   const sortedParams = sortObject(vnp_Params);
-  const signData = qs.stringify(sortedParams, { encode: false }); // ❌ Không encode khi ký
-
+  const signData = qs.stringify(sortedParams, { encode: false });
   const hmac = crypto.createHmac('sha512', config.vnp_HashSecret);
   const secureHash = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
   sortedParams.vnp_SecureHash = secureHash;
@@ -63,16 +60,13 @@ function generatePaymentUrl({ amount, orderInfo, ipAddr, bankCode = '', orderTyp
   console.log('🧾 signData:', signData);
   console.log('🔐 secureHash:', secureHash);
 
-  return `${config.vnp_Url}?${qs.stringify(sortedParams)}`; // ✅ qs.stringify tự encode khi build URL
+  return `${config.vnp_Url}?${qs.stringify(sortedParams, { encode: false })}`;
 }
 
 function verifyVnpResponse(queryParams) {
   const config = getVnpConfig();
   const { vnp_SecureHash, vnp_SecureHashType, ...rest } = queryParams;
-
-  // ✅ Decode và lowercase key để khớp VNPAY
-  const decodedParams = decodeParams(rest);
-  const sortedParams = sortObject(decodedParams);
+  const sortedParams = sortObject(rest);
   const signData = qs.stringify(sortedParams, { encode: false });
 
   const hmac = crypto.createHmac('sha512', config.vnp_HashSecret);
@@ -84,14 +78,6 @@ function verifyVnpResponse(queryParams) {
   console.log('↪️ secureHash tính toán:', hash);
 
   return hash === vnp_SecureHash;
-}
-
-function decodeParams(obj) {
-  const decoded = {};
-  for (const [key, value] of Object.entries(obj)) {
-    decoded[key.toLowerCase()] = decodeURIComponent(value);
-  }
-  return decoded;
 }
 
 export { generatePaymentUrl, verifyVnpResponse, sortObject };
