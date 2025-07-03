@@ -63,7 +63,7 @@ function generatePaymentUrl({
     vnp_OrderInfo: orderInfo,
     vnp_OrderType: orderType,
     vnp_Locale: locale,
-    vnp_ReturnUrl: config.vnp_ReturnUrl, // Không encode ở đây
+    vnp_ReturnUrl: encodeURIComponent(config.vnp_ReturnUrl), // Không encode ở đây
     vnp_IpAddr: ipAddr,
     vnp_CreateDate: createDate,
     vnp_ExpireDate: expireDate,
