@@ -39,11 +39,7 @@ function generatePaymentUrl({
     .toISOString().replace(/[-T:Z.]/g, '').slice(0, 14);
   const txnRef = `${now.getTime()}`.slice(-8);
 
-  // 🔥 Auto encode ReturnUrl chỉ khi Live
-  const returnUrl = process.env.NODE_ENV === 'production'
-    ? encodeURIComponent(vnpayConfig.vnp_ReturnUrl)
-    : vnpayConfig.vnp_ReturnUrl;
-
+  // ✅ ReturnUrl RAW cho hash
   const vnp_Params = {
     vnp_Version: vnpayConfig.vnp_Version,
     vnp_Command: vnpayConfig.vnp_Command,
@@ -54,7 +50,7 @@ function generatePaymentUrl({
     vnp_OrderInfo: orderInfo,
     vnp_OrderType: orderType,
     vnp_Amount: amount * 100,
-    vnp_ReturnUrl: returnUrl,
+    vnp_ReturnUrl: vnpayConfig.vnp_ReturnUrl, // RAW
     vnp_IpAddr: ipAddr,
     vnp_CreateDate: createDate,
     vnp_ExpireDate: expireDate,
@@ -65,6 +61,8 @@ function generatePaymentUrl({
   }
 
   const sortedParams = sortObject(vnp_Params);
+
+  // ✅ Build signData (RAW ReturnUrl)
   const signData = qs.stringify(sortedParams, { encode: false });
   const hmac = crypto.createHmac('sha512', vnpayConfig.vnp_HashSecret);
   const secureHash = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
@@ -73,12 +71,20 @@ function generatePaymentUrl({
   console.log("🧾 signData:", signData);
   console.log("🔐 secureHash:", secureHash);
 
+  // ✅ Encode ReturnUrl cho redirect
+  sortedParams.vnp_ReturnUrl = encodeURIComponent(vnpayConfig.vnp_ReturnUrl);
+
   return `${vnpayConfig.vnp_Url}?${qs.stringify(sortedParams, { encode: false })}`;
 }
 
 function verifyVnpResponse(queryParams) {
   const vnpayConfig = getVnpConfig();
   const { vnp_SecureHash, vnp_SecureHashType, ...rest } = queryParams;
+
+  // ✅ ReturnUrl RAW cho verify
+  if (rest.vnp_ReturnUrl) {
+    rest.vnp_ReturnUrl = decodeURIComponent(rest.vnp_ReturnUrl);
+  }
 
   const sortedParams = sortObject(rest);
   const signData = qs.stringify(sortedParams, { encode: false });
