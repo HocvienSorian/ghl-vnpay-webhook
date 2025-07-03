@@ -41,10 +41,10 @@ function generatePaymentUrl({ amount, orderInfo, ipAddr, bankCode = '', orderTyp
     vnp_Amount: amount * 100,
     vnp_CurrCode: config.vnp_CurrCode,
     vnp_TxnRef: txnRef,
-    vnp_OrderInfo: encodeURIComponent(orderInfo), // ✅ encode trước khi ký
+    vnp_OrderInfo: orderInfo, // ❌ không encode khi ký
     vnp_OrderType: orderType,
     vnp_Locale: locale,
-    vnp_ReturnUrl: encodeURIComponent(config.vnp_ReturnUrl), // ✅ encode trước khi ký
+    vnp_ReturnUrl: config.vnp_ReturnUrl, // ❌ không encode khi ký
     vnp_IpAddr: ipAddr,
     vnp_CreateDate: createDate,
   };
@@ -60,7 +60,7 @@ function generatePaymentUrl({ amount, orderInfo, ipAddr, bankCode = '', orderTyp
   console.log('🧾 signData:', signData);
   console.log('🔐 secureHash:', secureHash);
 
-  return `${config.vnp_Url}?${qs.stringify(sortedParams, { encode: false })}`;
+  return `${config.vnp_Url}?${qs.stringify(sortedParams)}`; // ✅ qs.stringify sẽ encode đúng khi build URL
 }
 
 function verifyVnpResponse(queryParams) {
