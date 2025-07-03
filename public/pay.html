@@ -47,7 +47,7 @@
       amount: data.amount,
       orderId: data.orderId || data.transactionId || "ORD_FALLBACK",
       // ✅ Truyền contactId thật từ GHL vào orderInfo
-      orderInfo: data.contactId || "fallback-contactId",
+      orderInfo: data.invoiceId || "fallback-contactId",
       ipAddr,
     };
 
