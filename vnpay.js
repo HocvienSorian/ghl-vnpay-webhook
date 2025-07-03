@@ -33,9 +33,8 @@ function generatePaymentUrl({ amount, orderInfo, ipAddr, bankCode = '', orderTyp
 
   // ✅ Đảm bảo GMT+7
   const date = new Date();
-  date.setHours(date.getHours() + 7); // cộng thêm 7 tiếng để về giờ VN
+  date.setHours(date.getHours() + 7);
   const createDate = date.toISOString().replace(/[-T:Z.]/g, '').slice(0, 14);
-
   const txnRef = date.getTime().toString().slice(-8);
 
   const vnp_Params = {
@@ -45,10 +44,10 @@ function generatePaymentUrl({ amount, orderInfo, ipAddr, bankCode = '', orderTyp
     vnp_Amount: amount * 100,
     vnp_CurrCode: config.vnp_CurrCode,
     vnp_TxnRef: txnRef,
-    vnp_OrderInfo: encodeURIComponent(orderInfo), // ✅ giữ nguyên
+    vnp_OrderInfo: orderInfo,          // ❌ không encode khi ký
     vnp_OrderType: orderType,
     vnp_Locale: locale,
-    vnp_ReturnUrl: encodeURIComponent(config.vnp_ReturnUrl), // ✅ giữ nguyên
+    vnp_ReturnUrl: config.vnp_ReturnUrl, // ❌ không encode khi ký
     vnp_IpAddr: ipAddr,
     vnp_CreateDate: createDate,
   };
@@ -56,7 +55,8 @@ function generatePaymentUrl({ amount, orderInfo, ipAddr, bankCode = '', orderTyp
   if (bankCode) vnp_Params.vnp_BankCode = bankCode;
 
   const sortedParams = sortObject(vnp_Params);
-  const signData = qs.stringify(sortedParams, { encode: false });
+  const signData = qs.stringify(sortedParams, { encode: false }); // ❌ encode: false khi ký
+
   const hmac = crypto.createHmac('sha512', config.vnp_HashSecret);
   const secureHash = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
   sortedParams.vnp_SecureHash = secureHash;
@@ -64,14 +64,15 @@ function generatePaymentUrl({ amount, orderInfo, ipAddr, bankCode = '', orderTyp
   console.log('🧾 signData:', signData);
   console.log('🔐 secureHash:', secureHash);
 
-  return `${config.vnp_Url}?${qs.stringify(sortedParams, { encode: false })}`;
+  // ✅ encode khi build URL redirect
+  return `${config.vnp_Url}?${qs.stringify(sortedParams)}`;
 }
 
 function verifyVnpResponse(queryParams) {
   const config = getVnpConfig();
   const { vnp_SecureHash, vnp_SecureHashType, ...rest } = queryParams;
   const sortedParams = sortObject(rest);
-  const signData = qs.stringify(sortedParams, { encode: false });
+  const signData = qs.stringify(sortedParams, { encode: false }); // ❌ không encode khi verify
 
   const hmac = crypto.createHmac('sha512', config.vnp_HashSecret);
   const hash = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
