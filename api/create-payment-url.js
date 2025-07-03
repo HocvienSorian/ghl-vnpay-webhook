@@ -25,7 +25,11 @@ export default async function handler(req, res) {
   try {
     const { amount, orderId, contactId, ipAddr } = req.body;
 
-    // 1️⃣ Tạo paymentLink từ GHL
+    if (!amount || !contactId) {
+      return res.status(400).json({ error: 'Thiếu amount hoặc contactId' });
+    }
+
+    // 🟢 Gọi GHL để tạo paymentLink
     const ghlRes = await axios.post(
       `${GHL_API_BASE}/payments/links/`,
       {
@@ -43,12 +47,13 @@ export default async function handler(req, res) {
     const invoiceId = extractInvoiceIdFromUrl(paymentLink);
 
     if (!invoiceId) {
-      throw new Error('❌ Không tìm thấy invoiceId trong paymentLink');
+      console.error('❌ Không tìm thấy invoiceId trong paymentLink:', paymentLink);
+      return res.status(500).json({ error: 'Không tìm thấy invoiceId trong paymentLink' });
     }
 
     console.log('📦 Lấy invoiceId từ paymentLink:', invoiceId);
 
-    // 2️⃣ Tạo paymentUrl VNPAY, gắn invoiceId vào orderInfo
+    // 🟢 Tạo paymentUrl VNPAY
     const paymentUrl = generatePaymentUrl({
       amount,
       orderInfo: invoiceId,
@@ -57,8 +62,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ paymentUrl });
   } catch (err) {
-    console.error('❌ Lỗi create-payment-url:', err);
+    console.error('❌ Lỗi create-payment-url:', err.response?.data || err.message);
     return res.status(500).json({ error: 'Failed to create payment URL', details: err.message });
   }
 }
-
