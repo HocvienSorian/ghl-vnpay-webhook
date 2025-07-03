@@ -3,7 +3,7 @@ import qs from 'qs';
 
 function sortObject(obj) {
   const sorted = {};
-  const keys = Object.keys(obj).map(k => k.toLowerCase()).sort();
+  const keys = Object.keys(obj).sort();
   for (let key of keys) {
     sorted[key] = obj[key];
   }
@@ -30,6 +30,10 @@ function getVnpConfig() {
 
 function generatePaymentUrl({ amount, orderInfo, ipAddr, bankCode = '', orderType = 'other', locale = 'vn' }) {
   const config = getVnpConfig();
+  if (!orderInfo || !config.vnp_ReturnUrl) {
+    throw new Error('❌ Thiếu orderInfo hoặc vnp_ReturnUrl');
+  }
+
   const date = new Date();
   date.setHours(date.getHours() + 7);
   const createDate = date.toISOString().replace(/[-T:Z.]/g, '').slice(0, 14);
@@ -56,12 +60,12 @@ function generatePaymentUrl({ amount, orderInfo, ipAddr, bankCode = '', orderTyp
   const signData = qs.stringify(sortedParams, { encode: false });
   const hmac = crypto.createHmac('sha512', config.vnp_HashSecret);
   const secureHash = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
-  sortedParams.vnp_SecureHash = secureHash;
 
   console.log('🧾 signData:', signData);
   console.log('🔐 secureHash:', secureHash);
 
-  return `${config.vnp_Url}?${qs.stringify(sortedParams)}`;
+  const queryString = qs.stringify(sortedParams, { encode: true });
+  return `${config.vnp_Url}?${queryString}&vnp_SecureHash=${secureHash}`;
 }
 
 function verifyVnpResponse(queryParams) {
