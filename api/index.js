@@ -23,26 +23,24 @@ export default async function handler(req, res) {
       return res.status(200).json({ message: 'Giao dịch thất bại từ VNPAY' });
     }
 
-    // ✅ Fix: lấy contactId từ OrderInfo nếu hợp lệ, fallback entityId nếu cần
-    const contactId = vnpParams.vnp_OrderInfo || vnpParams.vnp_TransactionNo;
-    if (!contactId || contactId.startsWith('ThanhtoantuGHL')) {
-      throw new Error('❌ contactId không hợp lệ, cần ID thực từ GHL');
-    }
-
     const amount = parseInt(vnpParams.vnp_Amount, 10) / 100;
     const payDate = vnpParams.vnp_PayDate;
 
-    console.log('🧾 Gửi createInvoiceInGHL:', { contactId, amount, payDate });
+    console.log('🧾 Gửi createInvoiceInGHL:', {
+      contactId: vnpParams.vnp_OrderInfo,
+      amount,
+      payDate,
+    });
 
     await createInvoiceInGHL({
-      contactId,
+      contactId: vnpParams.vnp_OrderInfo,
       amount,
       description: `Thanh toán đơn hàng #${vnpParams.vnp_TxnRef}`,
       payDate,
     });
 
     console.log('🏷️ Cập nhật tag contact');
-    await updateGHLContact(contactId, {
+    await updateGHLContact(vnpParams.vnp_OrderInfo, {
       tags: ['Đã thanh toán VNPAY'],
     });
 
