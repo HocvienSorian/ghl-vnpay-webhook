@@ -33,13 +33,18 @@ function generatePaymentUrl({
 }) {
   const vnpayConfig = getVnpConfig();
 
-  const now = new Date(Date.now() + 7 * 60 * 60 * 1000); // GMT+7
+  const now = new Date(Date.now() + 7 * 60 * 60 * 1000);
   const createDate = now.toISOString().replace(/[-T:Z.]/g, '').slice(0, 14);
   const expireDate = new Date(now.getTime() + 15 * 60 * 1000)
     .toISOString().replace(/[-T:Z.]/g, '').slice(0, 14);
   const txnRef = `${now.getTime()}`.slice(-8);
 
-  // ✅ ReturnUrl RAW cho hash
+  // 🌟 Auto encode ReturnUrl khi hash nếu chạy Sandbox
+  const isSandbox = vnpayConfig.vnp_Url.includes('sandbox');
+  const returnUrlForSign = isSandbox
+    ? encodeURIComponent(vnpayConfig.vnp_ReturnUrl)
+    : vnpayConfig.vnp_ReturnUrl;
+
   const vnp_Params = {
     vnp_Version: vnpayConfig.vnp_Version,
     vnp_Command: vnpayConfig.vnp_Command,
@@ -50,7 +55,7 @@ function generatePaymentUrl({
     vnp_OrderInfo: orderInfo,
     vnp_OrderType: orderType,
     vnp_Amount: amount * 100,
-    vnp_ReturnUrl: vnpayConfig.vnp_ReturnUrl, // RAW
+    vnp_ReturnUrl: returnUrlForSign,
     vnp_IpAddr: ipAddr,
     vnp_CreateDate: createDate,
     vnp_ExpireDate: expireDate,
@@ -62,7 +67,7 @@ function generatePaymentUrl({
 
   const sortedParams = sortObject(vnp_Params);
 
-  // ✅ Build signData (RAW ReturnUrl)
+  // ✅ Build signData
   const signData = qs.stringify(sortedParams, { encode: false });
   const hmac = crypto.createHmac('sha512', vnpayConfig.vnp_HashSecret);
   const secureHash = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
@@ -71,7 +76,7 @@ function generatePaymentUrl({
   console.log("🧾 signData:", signData);
   console.log("🔐 secureHash:", secureHash);
 
-  // ✅ Encode ReturnUrl cho redirect
+  // 🌟 Always encode ReturnUrl for redirect
   sortedParams.vnp_ReturnUrl = encodeURIComponent(vnpayConfig.vnp_ReturnUrl);
 
   return `${vnpayConfig.vnp_Url}?${qs.stringify(sortedParams, { encode: false })}`;
@@ -81,8 +86,10 @@ function verifyVnpResponse(queryParams) {
   const vnpayConfig = getVnpConfig();
   const { vnp_SecureHash, vnp_SecureHashType, ...rest } = queryParams;
 
-  // ✅ ReturnUrl RAW cho verify
-  if (rest.vnp_ReturnUrl) {
+  const isSandbox = vnpayConfig.vnp_Url.includes('sandbox');
+  if (isSandbox && rest.vnp_ReturnUrl) {
+    rest.vnp_ReturnUrl = encodeURIComponent(decodeURIComponent(rest.vnp_ReturnUrl));
+  } else if (rest.vnp_ReturnUrl) {
     rest.vnp_ReturnUrl = decodeURIComponent(rest.vnp_ReturnUrl);
   }
 
