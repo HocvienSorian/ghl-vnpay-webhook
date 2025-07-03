@@ -46,7 +46,6 @@
     const payload = {
       amount: data.amount,
       orderId: data.orderId || data.transactionId || "ORD_FALLBACK",
-      // ✅ Truyền contactId thật từ GHL vào orderInfo
       orderInfo: data.contactId || "fallback-contactId",
       ipAddr,
     };
@@ -67,7 +66,22 @@
         body: JSON.stringify(payload)
       });
 
-      const result = await res.json();
+      if (!res.ok) {
+        const text = await res.text();
+        console.error(`❌ Server trả về ${res.status}:`, text);
+        alert(`❌ Lỗi server: ${res.status}`);
+        return;
+      }
+
+      let result;
+      try {
+        result = await res.json();
+      } catch (jsonErr) {
+        const text = await res.text();
+        console.error("❌ Response không phải JSON:", text);
+        alert("❌ Response không hợp lệ");
+        return;
+      }
 
       if (result.paymentUrl) {
         console.log("✅ Mở tab mới tới VNPAY:", result.paymentUrl);
@@ -92,7 +106,6 @@
       return;
     }
 
-    // ✅ Đảm bảo data.contactId tồn tại
     if (!data.contactId) {
       console.error("❌ Không nhận được contactId từ GHL.");
       alert("❌ Không tìm thấy contactId từ GHL.");
