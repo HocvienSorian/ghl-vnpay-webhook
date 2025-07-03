@@ -22,8 +22,8 @@ function getVnpConfig() {
   return {
     vnp_Version: '2.1.0',
     vnp_Command: 'pay',
-    vnp_TmnCode: process.env.VNP_TMNCODE,
-    vnp_HashSecret: process.env.VNP_HASHSECRET,
+    vnp_TmnCode: process.env.VNP_TMNCODE.trim(),
+    vnp_HashSecret: process.env.VNP_HASHSECRET.trim(),
     vnp_Url: process.env.VNP_URL,
     vnp_ReturnUrl: process.env.VNP_RETURNURL,
     vnp_CurrCode: 'VND',
@@ -43,15 +43,14 @@ function generatePaymentUrl({
   const config = getVnpConfig();
 
   // ✅ Lấy thời gian GMT+7
-  const now = new Date();
-  const gmt7 = new Date(now.getTime() + 7 * 60 * 60 * 1000);
-  const createDate = gmt7.toISOString().replace(/[-T:Z.]/g, '').slice(0, 14);
+  const now = new Date(Date.now() + 7 * 60 * 60 * 1000);
+  const createDate = now.toISOString().replace(/[-T:Z.]/g, '').slice(0, 14);
 
   // ✅ Tính expireDate +15 phút GMT+7
-  const expire = new Date(gmt7.getTime() + 15 * 60 * 1000);
+  const expire = new Date(now.getTime() + 15 * 60 * 1000);
   const expireDate = expire.toISOString().replace(/[-T:Z.]/g, '').slice(0, 14);
 
-  const txnRef = `${gmt7.getTime()}`.slice(-8);
+  const txnRef = `${Date.now()}`.slice(-8); // random không trùng
 
   const vnp_Params = {
     vnp_Version: config.vnp_Version,
@@ -63,7 +62,7 @@ function generatePaymentUrl({
     vnp_OrderInfo: orderInfo,
     vnp_OrderType: orderType,
     vnp_Locale: locale,
-    vnp_ReturnUrl: encodeURIComponent(config.vnp_ReturnUrl), // Không encode ở đây
+    vnp_ReturnUrl: config.vnp_ReturnUrl, // KHÔNG encode ở đây
     vnp_IpAddr: ipAddr,
     vnp_CreateDate: createDate,
     vnp_ExpireDate: expireDate,
@@ -81,14 +80,15 @@ function generatePaymentUrl({
   ).join('&');
 
   const hmac = crypto.createHmac('sha512', config.vnp_HashSecret);
-  const secureHash = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
+  const secureHash = hmac.update(signData, 'utf-8').digest('hex');
   sortedParams.vnp_SecureHash = secureHash;
 
   console.log('🧾 signData:', signData);
   console.log('🔐 secureHash:', secureHash);
 
+  // ✅ Build final URL (encode toàn bộ key & value)
   const queryString = Object.keys(sortedParams).map(key =>
-    `${key}=${encodeURIComponent(sortedParams[key])}`
+    `${encodeURIComponent(key)}=${encodeURIComponent(sortedParams[key])}`
   ).join('&');
 
   return `${config.vnp_Url}?${queryString}`;
@@ -108,7 +108,7 @@ function verifyVnpResponse(queryParams) {
   ).join('&');
 
   const hmac = crypto.createHmac('sha512', config.vnp_HashSecret);
-  const hash = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
+  const hash = hmac.update(signData, 'utf-8').digest('hex');
 
   console.log('📥 VERIFY RESPONSE:');
   console.log('↪️ signData:', signData);
@@ -123,3 +123,4 @@ export {
   verifyVnpResponse,
   sortObject,
 };
+
