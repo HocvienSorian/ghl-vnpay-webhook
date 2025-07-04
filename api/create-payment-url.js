@@ -46,17 +46,15 @@ export default async function handler(req, res) {
 
     let invoiceId = null;
 
-    // 🟢 Trường hợp 1: Có sẵn paymentLink từ GHL
+    // 🟢 Trường hợp 1: Có sẵn paymentLink từ frontend
     if (paymentLink) {
       invoiceId = extractInvoiceIdFromUrl(paymentLink);
-      if (!invoiceId) {
-        console.error('❌ Không tìm thấy invoiceId trong paymentLink:', paymentLink);
-        return res.status(500).json({ error: 'Không tìm thấy invoiceId trong paymentLink' });
+      if (invoiceId) {
+        console.log('📦 Trường hợp 1: Extracted invoiceId =', invoiceId);
       }
-      console.log('📦 Trường hợp 1: Extracted invoiceId =', invoiceId);
     }
 
-    // 🟢 Trường hợp 2: Không có paymentLink ➝ Tạo invoice mới
+    // 🟢 Trường hợp 2: Fallback Create Invoice nếu không có paymentLink
     if (!invoiceId && contactId) {
       const today = getTodayDate();
       const invoicePayload = {
@@ -97,21 +95,13 @@ export default async function handler(req, res) {
           phoneNo: '+84-123-456-789',
           email: 'customer@example.com',
           address: {
-            addressLine1: '',
-            addressLine2: '',
-            city: '',
-            state: '',
-            countryCode: 'VN',
-            postalCode: ''
+            countryCode: 'VN'
           }
         },
         invoiceNumberPrefix: 'INV-',
         issueDate: today,
         dueDate: today,
-        liveMode: true,
-        automaticTaxesEnabled: false,
-        paymentMethods: { stripe: { enableBankDebitOnly: false } },
-        attachments: []
+        liveMode: true
       };
 
       console.log('📤 Trường hợp 2: Create Invoice Payload:', JSON.stringify(invoicePayload, null, 2));
@@ -122,11 +112,12 @@ export default async function handler(req, res) {
 
       invoiceId = ghlRes.data?._id;
 
-      if (!invoiceId) {
+      if (invoiceId) {
+        console.log('📦 Trường hợp 2: Created invoiceId =', invoiceId);
+      } else {
         console.error('❌ Không tìm thấy invoiceId trong response:', ghlRes.data);
         return res.status(500).json({ error: 'Không tìm thấy invoiceId trong response' });
       }
-      console.log('📦 Trường hợp 2: Created invoiceId =', invoiceId);
     }
 
     if (!invoiceId) {
@@ -134,7 +125,7 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Không có invoiceId để tiếp tục' });
     }
 
-    // 🟢 Tạo paymentUrl VNPAY với orderInfo = invoiceId
+    // 🟢 Tạo paymentUrl VNPAY
     const paymentUrl = generatePaymentUrl({
       amount,
       orderInfo: invoiceId,
@@ -153,3 +144,4 @@ export default async function handler(req, res) {
     });
   }
 }
+
