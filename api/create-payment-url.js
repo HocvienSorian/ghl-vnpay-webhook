@@ -1,21 +1,16 @@
+// pages/api/create-payment-url.js
 import { generatePaymentUrl } from '../vnpay.js';
 
-// 🟢 Extract invoiceId từ paymentLink
-function extractInvoiceIdFromUrl(url) {
-  const match = url.match(/invoice\/([a-f0-9]{24})/);
-  return match ? match[1] : null;
-}
-
-export default async function handler(req, res) {
+export default function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Chỉ hỗ trợ phương thức POST' });
   }
 
-  const { amount, paymentLink, ipAddr } = req.body;
+  const { amount, orderId, orderInfo, ipAddr } = req.body;
 
-  if (!amount || !paymentLink || !ipAddr) {
-    console.warn('⚠ Thiếu tham số:', { amount, paymentLink, ipAddr });
-    return res.status(400).json({ error: 'Thiếu amount, paymentLink hoặc ipAddr' });
+  if (!amount || !orderId || !orderInfo || !ipAddr) {
+    console.warn('⚠ Thiếu tham số:', { amount, orderId, orderInfo, ipAddr });
+    return res.status(400).json({ error: 'Thiếu tham số bắt buộc' });
   }
 
   try {
@@ -26,28 +21,24 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Thiếu cấu hình môi trường VNPAY', missing });
     }
 
-    const invoiceId = extractInvoiceIdFromUrl(paymentLink);
-    if (!invoiceId) {
-      console.error('❌ Không tìm thấy invoiceId trong paymentLink:', paymentLink);
-      return res.status(500).json({ error: 'Không tìm thấy invoiceId trong paymentLink' });
-    }
+    const paymentUrl = generatePaymentUrl({ amount, orderId, orderInfo, ipAddr });
 
-    console.log('📦 Extracted invoiceId =', invoiceId);
-
-    const paymentUrl = generatePaymentUrl({
-      amount,
-      orderInfo: invoiceId,
-      ipAddr
-    });
-
-    console.log('✅ Generated paymentUrl:', paymentUrl);
+    // ⚠️ Rất quan trọng để debug sai chữ ký
+    console.log('📌 DEBUG:');
+    console.log('   ↪️ Order ID:', orderId);
+    console.log('   💬 Order Info:', orderInfo);
+    console.log('   💰 Amount:', amount);
+    console.log('   🌐 IP:', ipAddr);
+    console.log('>>> ✅ Generated paymentUrl:', paymentUrl);
 
     return res.status(200).json({ paymentUrl });
   } catch (err) {
-    console.error('🔥 Lỗi khi tạo paymentUrl:', err.message);
+    console.error('🔥 Lỗi khi tạo URL thanh toán:', err);
+
     return res.status(500).json({
-      error: 'Lỗi tạo paymentUrl',
-      detail: err.message
+      error: 'Lỗi nội bộ khi tạo URL thanh toán',
+      detail: err.message,
+      suggestion: '❗Hãy kiểm tra encode vnp_OrderInfo, vnp_ReturnUrl và cấu hình hash secret',
     });
   }
 }
