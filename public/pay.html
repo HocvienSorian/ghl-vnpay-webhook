@@ -13,20 +13,96 @@
 </head>
 <body>
   <h1>🧾 Cổng Thanh Toán VNPAY</h1>
-  <p id="status">⏳ Đang chờ GHL gửi thông tin thanh toán...</p>
+  <p id="status">⏳ Đang xử lý kết quả thanh toán...</p>
 
 <script>
   let paymentDataReceived = false;
 
+  // ✅ Gửi event ready khi iframe load xong
   window.addEventListener("load", () => {
     setTimeout(() => {
       console.log("🚀 Iframe loaded – gửi custom_provider_ready");
-      window.postMessage({
+      window.parent.postMessage({
         type: "custom_provider_ready",
         loaded: true,
         providerId: "685ca9b987c1777791c22f89"
       }, "*");
     }, 300);
+  });
+
+  // ✅ Nếu VNPAY redirect về pay.html với params, xử lý verify
+  async function handleVnpayReturn() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const vnp_ResponseCode = urlParams.get("vnp_ResponseCode");
+    const vnp_TransactionNo = urlParams.get("vnp_TransactionNo");
+    const vnp_TxnRef = urlParams.get("vnp_TxnRef");
+    const vnp_SecureHash = urlParams.get("vnp_SecureHash");
+
+    if (!vnp_ResponseCode || !vnp_TxnRef || !vnp_SecureHash) {
+      console.log("⚠️ Không có tham số VNPAY trong URL, tiếp tục flow cũ");
+      return;
+    }
+
+    console.log("📥 Nhận callback từ VNPAY:", {
+      vnp_ResponseCode, vnp_TransactionNo, vnp_TxnRef
+    });
+
+    try {
+      document.getElementById("status").innerText = "🔍 Đang xác minh giao dịch với GHL...";
+
+      // Gửi verify request tới GHL (queryUrl)
+      const res = await fetch("/api/vnpay-handler", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "verify",
+          chargeId: vnp_TransactionNo,
+          transactionId: vnp_TxnRef
+        })
+      });
+
+      const result = await res.json();
+      console.log("✅ Kết quả verify:", result);
+
+      if (res.ok && result.success) {
+        // ✅ Gửi event success về GHL
+        window.parent.postMessage({
+          type: "custom_element_success_response",
+          chargeId: vnp_TransactionNo
+        }, "*");
+        document.getElementById("status").innerText = "🎉 Thanh toán thành công!";
+      } else {
+        // ❌ Gửi event error về GHL
+        window.parent.postMessage({
+          type: "custom_element_error_response",
+          error: { description: "Giao dịch thất bại hoặc chưa xác minh." }
+        }, "*");
+        document.getElementById("status").innerText = "❌ Giao dịch thất bại.";
+      }
+    } catch (err) {
+      console.error("🔥 Lỗi verify:", err);
+      window.parent.postMessage({
+        type: "custom_element_error_response",
+        error: { description: "Lỗi xác minh giao dịch." }
+      }, "*");
+      document.getElementById("status").innerText = "❌ Lỗi khi xác minh giao dịch.";
+    }
+  }
+
+  handleVnpayReturn();
+
+  // ✅ Giữ nguyên logic nhận payment_initiate_props nếu có
+  window.addEventListener("message", async (event) => {
+    const data = event.data;
+    console.log("📥 Nhận dữ liệu từ GHL:", data);
+
+    if (data?.type !== "payment_initiate_props") {
+      console.warn("⚠️ Không phải payment_initiate_props:", data?.type);
+      return;
+    }
+
+    paymentDataReceived = true;
+    await initiatePayment(data);
   });
 
   async function getClientIp() {
@@ -70,7 +146,7 @@
 
       if (result.paymentUrl) {
         console.log("✅ Mở tab mới tới VNPAY:", result.paymentUrl);
-        window.open(result.paymentUrl, "_blank"); // ✅ mở tab mới tránh bị chặn
+        window.open(result.paymentUrl, "_blank");
         document.getElementById("status").innerText = "✅ Đã mở trang thanh toán.";
       } else {
         console.error("❌ Không nhận được paymentUrl:", result);
@@ -82,19 +158,7 @@
     }
   }
 
-  window.addEventListener("message", async (event) => {
-    const data = event.data;
-    console.log("📥 Nhận dữ liệu từ GHL:", data);
-
-    if (data?.type !== "payment_initiate_props") {
-      console.warn("⚠️ Không phải payment_initiate_props:", data?.type);
-      return;
-    }
-
-    paymentDataReceived = true;
-    await initiatePayment(data);
-  });
-
+  // Fallback nếu không nhận được payment_initiate_props
   setTimeout(async () => {
     if (!paymentDataReceived) {
       console.warn("⏱ Không có dữ liệu từ GHL, gọi fallback...");
