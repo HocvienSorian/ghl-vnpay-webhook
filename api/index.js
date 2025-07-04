@@ -1,3 +1,5 @@
+// INDEX.JS
+
 import { verifyVnpResponse } from '../vnpay.js';
 import { updateInvoiceInGHL, fetchContactDetails } from '../ghl.js';
 
@@ -31,16 +33,15 @@ export default async function handler(req, res) {
 
     const amount = parseInt(vnpParams.vnp_Amount, 10) / 100;
     const payDate = vnpParams.vnp_PayDate;
-    const contactId = vnpParams.vnp_OrderInfo;
-    const invoiceId = "6866542e828e1bae78f604d8";
-    
-    if (!contactId) {
-      console.error('❌ Không tìm thấy contactId trong vnp_OrderInfo');
+    const invoiceId = vnpParams.vnp_OrderInfo;
+
+    if (!invoiceId) {
+      console.error('❌ Không tìm thấy invoiceId trong vnp_OrderInfo');
       return res.status(400).json({ error: 'Không tìm thấy invoiceId để cập nhật' });
     }
 
     // 🟢 Lấy thông tin contact từ GHL
-    const contact = await fetchContactDetails(contactId);
+    const contact = await fetchContactDetails(invoiceId);
 
     if (!contact) {
       console.error('❌ Không lấy được thông tin contact từ GHL.');
@@ -112,4 +113,3 @@ export default async function handler(req, res) {
     return res.status(statusCode).json({ error: 'Lỗi xử lý webhook', details: message });
   }
 }
-
