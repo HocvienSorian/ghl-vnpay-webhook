@@ -1,16 +1,39 @@
-// pages/api/create-payment-url.js
+import axios from 'axios';
 import { generatePaymentUrl } from '../vnpay.js';
 
-export default function handler(req, res) {
+const GHL_API_BASE = 'https://services.leadconnectorhq.com';
+const GHL_ACCESS_TOKEN = process.env.GHL_ACCESS_TOKEN;
+const GHL_LOCATION_ID = process.env.GHL_LOCATION_ID;
+
+const GHL_HEADERS = {
+  Authorization: `Bearer ${GHL_ACCESS_TOKEN}`,
+  Version: '2021-07-28',
+  Accept: 'application/json',
+  'Content-Type': 'application/json'
+};
+
+// 🟢 Extract invoiceId từ URL
+function extractInvoiceIdFromUrl(url) {
+  const match = url.match(/invoice\/([a-f0-9]{24})/);
+  return match ? match[1] : null;
+}
+
+// 🟢 Format ngày YYYY-MM-DD
+function getTodayDate() {
+  const today = new Date();
+  return today.toISOString().split('T')[0];
+}
+
+export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Chỉ hỗ trợ phương thức POST' });
   }
 
-  const { amount, orderId, orderInfo, ipAddr } = req.body;
+  const { amount, orderId, contactId, ipAddr, paymentLink } = req.body;
 
-  if (!amount || !orderId || !orderInfo || !ipAddr) {
-    console.warn('⚠ Thiếu tham số:', { amount, orderId, orderInfo, ipAddr });
-    return res.status(400).json({ error: 'Thiếu tham số bắt buộc' });
+  if (!amount || !ipAddr) {
+    console.warn('⚠ Thiếu tham số:', { amount, contactId, ipAddr, paymentLink });
+    return res.status(400).json({ error: 'Thiếu amount hoặc ipAddr' });
   }
 
   try {
@@ -21,24 +44,112 @@ export default function handler(req, res) {
       return res.status(500).json({ error: 'Thiếu cấu hình môi trường VNPAY', missing });
     }
 
-    const paymentUrl = generatePaymentUrl({ amount, orderId, orderInfo, ipAddr });
+    let invoiceId = null;
 
-    // ⚠️ Rất quan trọng để debug sai chữ ký
-    console.log('📌 DEBUG:');
-    console.log('   ↪️ Order ID:', orderId);
-    console.log('   💬 Order Info:', orderInfo);
-    console.log('   💰 Amount:', amount);
-    console.log('   🌐 IP:', ipAddr);
-    console.log('>>> ✅ Generated paymentUrl:', paymentUrl);
+    // 🟢 Trường hợp 1: Có sẵn paymentLink từ GHL
+    if (paymentLink) {
+      invoiceId = extractInvoiceIdFromUrl(paymentLink);
+      if (!invoiceId) {
+        console.error('❌ Không tìm thấy invoiceId trong paymentLink:', paymentLink);
+        return res.status(500).json({ error: 'Không tìm thấy invoiceId trong paymentLink' });
+      }
+      console.log('📦 Trường hợp 1: Extracted invoiceId =', invoiceId);
+    }
+
+    // 🟢 Trường hợp 2: Không có paymentLink ➝ Tạo invoice mới
+    if (!invoiceId && contactId) {
+      const today = getTodayDate();
+      const invoicePayload = {
+        altId: GHL_LOCATION_ID,
+        altType: 'location',
+        name: 'Thanh toán VNPAY',
+        businessDetails: {
+          logoUrl: 'https://example.com/logo.png',
+          name: 'Sorian Marketing',
+          phoneNo: '+1-214-559-6993',
+          address: {
+            addressLine1: '722 S PECK STREET',
+            city: 'Shiner',
+            state: 'TX',
+            countryCode: 'US',
+            postalCode: '77984'
+          },
+          website: 'www.sorianmarketing.com'
+        },
+        currency: 'VND',
+        items: [
+          {
+            name: 'Thanh toán VNPAY',
+            description: `Đơn hàng #${orderId || 'N/A'}`,
+            currency: 'VND',
+            amount,
+            qty: 1,
+            type: 'one_time',
+            taxInclusive: true
+          }
+        ],
+        discount: { value: 0, type: 'percentage' },
+        termsNotes: '<p>Hóa đơn thanh toán qua VNPAY</p>',
+        title: 'INVOICE',
+        contactDetails: {
+          id: contactId,
+          name: 'Khách hàng VNPAY',
+          phoneNo: '+84-123-456-789',
+          email: 'customer@example.com',
+          address: {
+            addressLine1: '',
+            addressLine2: '',
+            city: '',
+            state: '',
+            countryCode: 'VN',
+            postalCode: ''
+          }
+        },
+        invoiceNumberPrefix: 'INV-',
+        issueDate: today,
+        dueDate: today,
+        liveMode: true,
+        automaticTaxesEnabled: false,
+        paymentMethods: { stripe: { enableBankDebitOnly: false } },
+        attachments: []
+      };
+
+      console.log('📤 Trường hợp 2: Create Invoice Payload:', JSON.stringify(invoicePayload, null, 2));
+
+      const ghlRes = await axios.post(`${GHL_API_BASE}/invoices/`, invoicePayload, {
+        headers: GHL_HEADERS
+      });
+
+      invoiceId = ghlRes.data?._id;
+
+      if (!invoiceId) {
+        console.error('❌ Không tìm thấy invoiceId trong response:', ghlRes.data);
+        return res.status(500).json({ error: 'Không tìm thấy invoiceId trong response' });
+      }
+      console.log('📦 Trường hợp 2: Created invoiceId =', invoiceId);
+    }
+
+    if (!invoiceId) {
+      console.error('❌ Không có invoiceId để tiếp tục');
+      return res.status(500).json({ error: 'Không có invoiceId để tiếp tục' });
+    }
+
+    // 🟢 Tạo paymentUrl VNPAY với orderInfo = invoiceId
+    const paymentUrl = generatePaymentUrl({
+      amount,
+      orderInfo: invoiceId,
+      ipAddr
+    });
+
+    console.log('✅ Generated paymentUrl:', paymentUrl);
 
     return res.status(200).json({ paymentUrl });
   } catch (err) {
-    console.error('🔥 Lỗi khi tạo URL thanh toán:', err);
-
+    console.error('🔥 Lỗi khi tạo paymentUrl:', err.response?.data || err.message);
     return res.status(500).json({
-      error: 'Lỗi nội bộ khi tạo URL thanh toán',
+      error: 'Lỗi tạo paymentUrl',
       detail: err.message,
-      suggestion: '❗Hãy kiểm tra encode vnp_OrderInfo, vnp_ReturnUrl và cấu hình hash secret',
+      suggestion: '❗ Kiểm tra cấu hình VNPAY & GHL'
     });
   }
 }
