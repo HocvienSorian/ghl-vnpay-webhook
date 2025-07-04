@@ -10,6 +10,18 @@ const GHL_HEADERS = {
   'Content-Type': 'application/json'
 };
 
+export async function fetchContactDetails(contactId) {
+  try {
+    const res = await axios.get(`${GHL_API_BASE}/contacts/${contactId}`, {
+      headers: GHL_HEADERS
+    });
+    return res.data?.contact || null;
+  } catch (err) {
+    console.error('❌ Lỗi fetchContactDetails:', err.response?.data || err.message);
+    return null;
+  }
+}
+
 export async function updateInvoiceInGHL(invoiceId, data) {
   try {
     const res = await axios.put(`${GHL_API_BASE}/invoices/${invoiceId}`, data, {
