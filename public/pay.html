@@ -42,7 +42,7 @@
 
   async function initiatePayment(data) {
     const ipAddr = await getClientIp();
-    const paymentLink = window.location.href; // 🟢 lấy URL hiện tại
+    const paymentLink = window.parent.location.href; // 🟢 lấy URL hiện tại
     const payload = {
       amount: data.amount,
       orderId: data.orderId || data.transactionId || "ORD_FALLBACK",
