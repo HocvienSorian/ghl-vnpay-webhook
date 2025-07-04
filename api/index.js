@@ -31,7 +31,7 @@ export default async function handler(req, res) {
 
     const amount = parseInt(vnpParams.vnp_Amount, 10) / 100;
     const payDate = vnpParams.vnp_PayDate;
-    const invoiceId = "6866542e828e1bae78f604d8";
+    const invoiceId = vnpParams.vnp_OrderInfo;
 
     if (!invoiceId) {
       console.error('❌ Không tìm thấy invoiceId trong vnp_OrderInfo');
