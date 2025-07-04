@@ -42,16 +42,16 @@
 
   async function initiatePayment(data) {
     const ipAddr = await getClientIp();
-
-    const paymentLink = window.location.href; // 🟢 lấy URL hiện tại nếu có
+    const paymentLink = window.location.href; // 🟢 lấy URL hiện tại
 
     const payload = {
       amount: data.amount,
       orderId: data.orderId || data.transactionId || "ORD_FALLBACK",
-      contactId: data.contactId,
-      ipAddr,
-      paymentLink // 🟢 truyền paymentLink để backend extract invoiceId
+      paymentLink, // 🟢 gửi paymentLink để backend extract invoiceId
+      ipAddr
     };
+
+    console.log("📦 Payload gửi backend:", payload);
 
     const missing = Object.entries(payload).filter(([_, v]) => !v).map(([k]) => k);
     if (missing.length > 0) {
@@ -73,7 +73,7 @@
 
       if (result.paymentUrl) {
         console.log("✅ Mở tab mới tới VNPAY:", result.paymentUrl);
-        window.open(result.paymentUrl, "_blank"); // mở tab mới tránh bị chặn
+        window.open(result.paymentUrl, "_blank");
         document.getElementById("status").innerText = "✅ Đã mở trang thanh toán.";
       } else {
         console.error("❌ Không nhận được paymentUrl:", result);
@@ -94,12 +94,6 @@
       return;
     }
 
-    if (!data.contactId) {
-      console.error("❌ Không nhận được contactId từ GHL.");
-      alert("❌ Không tìm thấy contactId từ GHL.");
-      return;
-    }
-
     paymentDataReceived = true;
     await initiatePayment(data);
   });
@@ -107,15 +101,7 @@
   setTimeout(async () => {
     if (!paymentDataReceived) {
       console.warn("⏱ Không có dữ liệu từ GHL, gọi fallback...");
-      try {
-        const res = await fetch("/api/fetch-ghl-transaction");
-        const fallbackData = await res.json();
-        console.log("📦 Fallback transaction data:", fallbackData);
-        await initiatePayment(fallbackData);
-      } catch (err) {
-        console.error("❌ Lỗi fallback:", err);
-        document.getElementById("status").innerText = "❌ Không thể lấy dữ liệu giao dịch.";
-      }
+      document.getElementById("status").innerText = "❌ Không thể lấy dữ liệu giao dịch.";
     }
   }, 3000);
 </script>
