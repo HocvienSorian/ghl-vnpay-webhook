@@ -1,7 +1,11 @@
 import { verifyVnpResponse } from '../vnpay.js';
-import { updateInvoiceInGHL } from '../ghl.js';
+import { updateInvoiceInGHL, fetchContactDetails } from '../ghl.js';
 
 const GHL_LOCATION_ID = process.env.GHL_LOCATION_ID;
+
+function formatDate(yyyymmddHHMMSS) {
+  return `${yyyymmddHHMMSS.slice(0, 4)}-${yyyymmddHHMMSS.slice(4, 6)}-${yyyymmddHHMMSS.slice(6, 8)}`;
+}
 
 export default async function handler(req, res) {
   if (!['GET', 'POST'].includes(req.method)) {
@@ -34,6 +38,14 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Không tìm thấy invoiceId để cập nhật' });
     }
 
+    // 🟢 Lấy thông tin contact từ GHL
+    const contact = await fetchContactDetails(invoiceId);
+
+    if (!contact) {
+      console.error('❌ Không lấy được thông tin contact từ GHL.');
+      return res.status(500).json({ error: 'Không lấy được thông tin contact để cập nhật invoice' });
+    }
+
     const invoiceData = {
       altId: GHL_LOCATION_ID,
       altType: 'location',
@@ -41,9 +53,34 @@ export default async function handler(req, res) {
       title: 'INVOICE',
       currency: 'VND',
       description: `Thanh toán đơn hàng #${vnpParams.vnp_TxnRef}`,
-      issueDate: payDate,
-      dueDate: payDate,
+      issueDate: formatDate(payDate),
+      dueDate: formatDate(payDate),
       liveMode: true,
+      businessDetails: {
+        name: 'Sorian',
+        address: '722 S PECK STREET, SHINER, TX 77984',
+        phoneNo: '+17374449922',
+        website: 'www.sorianmarketing.com'
+      },
+      contactDetails: {
+        id: contact.id,
+        name: `${contact.firstName || ''} ${contact.lastName || ''}`.trim(),
+        email: contact.email,
+        phoneNo: contact.phone,
+        companyName: contact.companyName || '',
+        address: {
+          addressLine1: contact.address?.address1 || '',
+          addressLine2: contact.address?.address2 || '',
+          city: contact.address?.city || '',
+          state: contact.address?.state || '',
+          countryCode: contact.address?.country || '',
+          postalCode: contact.address?.postalCode || ''
+        }
+      },
+      discount: {
+        value: 0,
+        type: 'percentage'
+      },
       invoiceItems: [
         {
           name: 'Thanh toán VNPAY',
