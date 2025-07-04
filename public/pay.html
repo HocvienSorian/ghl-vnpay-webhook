@@ -17,7 +17,6 @@
 
 <script>
   let paymentDataReceived = false;
-  let savedPaymentLink = null; // 🟢 Lưu paymentLink gửi từ GHL
 
   window.addEventListener("load", () => {
     setTimeout(() => {
@@ -49,7 +48,6 @@
       orderId: data.orderId || data.transactionId || "ORD_FALLBACK",
       orderInfo: data.contactId,
       ipAddr,
-      paymentLink: savedPaymentLink, // 🟢 Truyền paymentLink sang backend
     };
 
     const missing = Object.entries(payload).filter(([_, v]) => !v).map(([k]) => k);
@@ -92,15 +90,6 @@
       console.warn("⚠️ Không phải payment_initiate_props:", data?.type);
       return;
     }
-
-    if (!data.paymentLink) {
-      console.error("❌ GHL không gửi paymentLink");
-      alert("❌ Không nhận được paymentLink từ GHL.");
-      return;
-    }
-
-    savedPaymentLink = data.paymentLink; // 🟢 Lưu paymentLink
-    console.log("🔗 paymentLink từ GHL:", savedPaymentLink);
 
     paymentDataReceived = true;
     await initiatePayment(data);
