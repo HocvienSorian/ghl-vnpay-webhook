@@ -58,7 +58,13 @@ export default async function handler(req, res) {
       liveMode: true,
       businessDetails: {
         name: 'Sorian',
-        address: '722 S PECK STREET, SHINER, TX 77984',
+        address: {
+          addressLine1: '722 S PECK STREET',
+          city: 'SHINER',
+          state: 'TX',
+          countryCode: 'US',
+          postalCode: '77984'
+        },
         phoneNo: '+17374449922',
         website: 'www.sorianmarketing.com'
       },
@@ -94,7 +100,7 @@ export default async function handler(req, res) {
       ]
     };
 
-    console.log('📝 Cập nhật invoice:', { invoiceId, invoiceData });
+    console.log('📝 Cập nhật invoice với dữ liệu:', JSON.stringify(invoiceData, null, 2));
     await updateInvoiceInGHL(invoiceId, invoiceData);
 
     return res.status(200).json({ message: '✅ Đã cập nhật hóa đơn thành công' });
@@ -105,3 +111,4 @@ export default async function handler(req, res) {
     return res.status(statusCode).json({ error: 'Lỗi xử lý webhook', details: message });
   }
 }
+
