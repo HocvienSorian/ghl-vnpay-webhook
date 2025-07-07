@@ -1,6 +1,5 @@
 // pages/api/vnpay-handler.js
 import axios from 'axios';
-import { verifyVnpResponse } from '../vnpay.js';
 
 const GHL_WEBHOOK_URL = "https://backend.leadconnectorhq.com/payments/custom-provider/webhook";
 const PRIVATE_PROVIDER_API_KEY = process.env.GHL_PRIVATE_PROVIDER_API_KEY;
@@ -42,58 +41,40 @@ async function sendPaymentCapturedWebhook({ chargeId, ghlTransactionId, amount, 
     console.error("❌ [Webhook] Lỗi gửi đến GHL:");
     console.error("Status:", err.response?.status);
     console.error("Data:", JSON.stringify(err.response?.data, null, 2));
-    console.error("Headers:", JSON.stringify(err.response?.headers, null, 2));
     throw err;
   }
 }
 
 export default async function handler(req, res) {
-  console.log("📥 [Handler] GHL gọi queryUrl");
+  console.log("📥 [Handler] VNPAY ReturnUrl/IPN gọi backend");
   console.log("Method:", req.method);
-  console.log("Headers:", JSON.stringify(req.headers, null, 2));
+  console.log("Query params:", JSON.stringify(req.query, null, 2));
 
-  if (req.method === 'GET') {
-    console.log("🔍 [Handler] Nhận GET request (GHL health check?)");
-    console.log("Query params:", JSON.stringify(req.query, null, 2));
-    return res.status(200).send("✅ Server OK (GET)");
+  const vnp_ResponseCode = req.query.vnp_ResponseCode;
+  const vnp_TransactionNo = req.query.vnp_TransactionNo;
+  const vnp_TxnRef = req.query.vnp_TxnRef;
+
+  if (!vnp_ResponseCode || !vnp_TransactionNo || !vnp_TxnRef) {
+    console.error("❌ Thiếu tham số từ VNPAY");
+    return res.status(400).send("❌ Thiếu tham số từ VNPAY");
   }
 
-  if (req.method === 'POST') {
-    console.log("📦 [Handler] Body:", JSON.stringify(req.body, null, 2));
-
-    const { type, transactionId, chargeId, locationId, amount } = req.body;
-
-    if (type !== 'verify' || !transactionId || !chargeId || !locationId) {
-      console.error("❌ [Handler] Thiếu tham số bắt buộc trong payload:");
-      return res.status(400).json({ error: 'Thiếu tham số verify' });
-    }
-
+  if (vnp_ResponseCode === '00') {
+    console.log("✅ Giao dịch VNPAY thành công. Đang gửi webhook đến GHL...");
     try {
-      console.log("🔍 [Handler] Đang xác minh giao dịch VNPAY...");
-      const isValidPayment = true; // TODO: Replace bằng VNPAY QueryDR call thực tế
-
-      if (isValidPayment) {
-        console.log("✅ [Handler] Giao dịch VNPAY hợp lệ. Đang gửi webhook...");
-        await sendPaymentCapturedWebhook({
-          chargeId,
-          ghlTransactionId: transactionId,
-          amount,
-          locationId
-        });
-
-        console.log("📤 [Handler] Trả success về GHL");
-        return res.status(200).json({ success: true });
-      } else {
-        console.warn("⚠️ [Handler] Giao dịch VNPAY không hợp lệ. Trả failed.");
-        return res.status(200).json({ failed: true });
-      }
+      await sendPaymentCapturedWebhook({
+        chargeId: vnp_TransactionNo,
+        ghlTransactionId: vnp_TxnRef,
+        amount: 100000, // 🎯 Lấy từ DB hoặc fallback
+        locationId: "adLYHnkHxGxHU7ofn3RN" // 🎯 Lấy từ DB hoặc fallback
+      });
+      return res.status(200).send("✅ Đã gửi webhook GHL");
     } catch (err) {
-      console.error("🔥 [Handler] Lỗi xử lý verify:");
-      console.error(err.stack || err.message);
-      return res.status(500).json({ error: 'Internal Server Error' });
+      console.error("🔥 Lỗi khi gửi webhook:", err.message);
+      return res.status(500).send("❌ Lỗi khi gửi webhook");
     }
+  } else {
+    console.warn("⚠️ Giao dịch VNPAY thất bại:", vnp_ResponseCode);
+    return res.status(200).send("⚠️ Giao dịch thất bại");
   }
-
-  console.warn("⚠️ [Handler] Method không hỗ trợ:", req.method);
-  return res.status(405).json({ error: 'Method Not Allowed' });
 }
