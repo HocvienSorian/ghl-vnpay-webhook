@@ -13,7 +13,7 @@
 </head>
 <body>
   <h1>🧾 Cổng Thanh Toán VNPAY</h1>
-  <p id="status">⏳ Đang xử lý kết quả thanh toán...</p>
+  <p id="status">⏳ Đang xử lý giao dịch...</p>
 
 <script>
   let paymentDataReceived = false;
@@ -28,44 +28,6 @@
       }, "*");
     }, 300);
   });
-
-  async function handleVnpayReturn() {
-    const urlParams = new URLSearchParams(window.location.search);
-    const vnp_ResponseCode = urlParams.get("vnp_ResponseCode");
-    const vnp_TransactionNo = urlParams.get("vnp_TransactionNo");
-    const vnp_TxnRef = urlParams.get("vnp_TxnRef");
-    const vnp_SecureHash = urlParams.get("vnp_SecureHash");
-
-    if (!vnp_ResponseCode || !vnp_TxnRef || !vnp_SecureHash) {
-      console.log("⚠️ Không có tham số VNPAY trong URL, tiếp tục flow cũ");
-      return;
-    }
-
-    console.log("📥 Nhận callback từ VNPAY:", {
-      vnp_ResponseCode, vnp_TransactionNo, vnp_TxnRef
-    });
-
-    document.getElementById("status").innerText = "🔍 Đang xác minh giao dịch...";
-
-    // ✅ Gửi success hoặc error event về GHL
-    if (vnp_ResponseCode === "00") {
-      console.log("✅ Thanh toán thành công tại VNPAY");
-      window.parent.postMessage({
-        type: "custom_element_success_response",
-        chargeId: vnp_TransactionNo
-      }, "*");
-      document.getElementById("status").innerText = "🎉 Thanh toán thành công!";
-    } else {
-      console.warn("❌ Thanh toán thất bại tại VNPAY");
-      window.parent.postMessage({
-        type: "custom_element_error_response",
-        error: { description: "Giao dịch thất bại hoặc bị hủy." }
-      }, "*");
-      document.getElementById("status").innerText = "❌ Giao dịch thất bại.";
-    }
-  }
-
-  handleVnpayReturn();
 
   window.addEventListener("message", async (event) => {
     const data = event.data;
@@ -108,7 +70,7 @@
       return;
     }
 
-    document.getElementById("status").innerText = "🔄 Đang xử lý giao dịch...";
+    document.getElementById("status").innerText = "🔄 Đang tạo giao dịch...";
 
     try {
       const res = await fetch("/api/create-payment-url", {
@@ -121,32 +83,39 @@
 
       if (result.paymentUrl) {
         console.log("✅ Mở tab mới tới VNPAY:", result.paymentUrl);
-        window.open(result.paymentUrl, "_blank");
+        const vnpayTab = window.open(result.paymentUrl, "_blank");
+
         document.getElementById("status").innerText = "✅ Đã mở trang thanh toán.";
+
+        // Nghe thông báo từ ReturnUrl ở tab mới
+        window.addEventListener("message", (event) => {
+          if (event.data?.type === "vnpay_payment_complete") {
+            console.log("📥 Nhận thông báo thanh toán từ tab mới:", event.data);
+
+            if (event.data.status === "success") {
+              window.parent.postMessage({
+                type: "custom_element_success_response",
+                chargeId: event.data.chargeId
+              }, "*");
+              document.getElementById("status").innerText = "🎉 Thanh toán thành công!";
+            } else {
+              window.parent.postMessage({
+                type: "custom_element_error_response",
+                error: { description: "Giao dịch thất bại hoặc bị hủy." }
+              }, "*");
+              document.getElementById("status").innerText = "❌ Giao dịch thất bại.";
+            }
+          }
+        });
       } else {
         console.error("❌ Không nhận được paymentUrl:", result);
         alert("❌ Không thể tạo link thanh toán.");
       }
     } catch (err) {
-      console.error("🔥 Lỗi gửi dữ liệu:", err);
+      console.error("🔥 Lỗi khi tạo URL thanh toán:", err);
       alert("❌ Có lỗi xảy ra. Vui lòng thử lại.");
     }
   }
-
-  setTimeout(async () => {
-    if (!paymentDataReceived) {
-      console.warn("⏱ Không có dữ liệu từ GHL, gọi fallback...");
-      try {
-        const res = await fetch("/api/fetch-ghl-transaction");
-        const fallbackData = await res.json();
-        console.log("📦 Fallback transaction data:", fallbackData);
-        await initiatePayment(fallbackData);
-      } catch (err) {
-        console.error("❌ Lỗi fallback:", err);
-        document.getElementById("status").innerText = "❌ Không thể lấy dữ liệu giao dịch.";
-      }
-    }
-  }, 3000);
 </script>
 </body>
 </html>
