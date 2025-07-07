@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <title>Thanh Toán VNPAY Thành Công</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      padding: 40px;
+    }
+  </style>
+</head>
+<body>
+  <h1>✅ Thanh Toán Thành Công</h1>
+  <p>Hệ thống đang xử lý giao dịch...</p>
+
+<script>
+  const urlParams = new URLSearchParams(window.location.search);
+  const vnp_ResponseCode = urlParams.get("vnp_ResponseCode");
+  const vnp_TransactionNo = urlParams.get("vnp_TransactionNo");
+  const vnp_TxnRef = urlParams.get("vnp_TxnRef");
+
+  console.log("📥 ReturnUrl nhận callback từ VNPAY:", {
+    vnp_ResponseCode, vnp_TransactionNo, vnp_TxnRef
+  });
+
+  if (window.opener) {
+    window.opener.postMessage({
+      type: "vnpay_payment_complete",
+      chargeId: vnp_TransactionNo,
+      status: vnp_ResponseCode === "00" ? "success" : "fail"
+    }, "*");
+
+    console.log("📤 Gửi thông báo thanh toán về tab cũ");
+    window.close(); // Đóng tab VNPAY sau khi gửi
+  } else {
+    console.warn("⚠️ Không tìm thấy window.opener, user có thể mở trực tiếp.");
+    document.body.innerHTML = "<h2>✅ Thanh toán xong, bạn có thể quay về trang trước.</h2>";
+  }
+</script>
+</body>
+</html>
