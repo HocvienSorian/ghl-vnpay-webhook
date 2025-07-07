@@ -65,12 +65,12 @@ export default async function handler(req, res) {
     const paymentMethods = [
       {
         id: "vnpay", // ID sẽ được dùng để charge
-        type: "card", // Hoặc "bank_account" nếu muốn
+        type: "custom", // Hoặc "bank_account" nếu muốn
         title: "VNPAY",
         subTitle: "One-time Payment",
         expiry: "", // VNPAY không có expiry
         customerId: contactId, // Liên kết với Contact trên GHL
-        imageUrl: "https://yourcdn.com/vnpay-logo.png" // URL icon VNPAY
+        imageUrl: "https://vnpay-webhook.vercel.app/logo.png" // URL icon VNPAY
       }
     ];
 
