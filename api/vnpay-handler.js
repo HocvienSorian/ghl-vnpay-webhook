@@ -17,7 +17,7 @@ async function sendPaymentCapturedWebhook({ chargeId, ghlTransactionId, amount, 
     ghlTransactionId,
     chargeSnapshot: {
       status: "succeeded",
-      amount: amount || 0, // fallback nếu amount undefined
+      amount: amount || 0,
       chargeId,
       chargedAt: Math.floor(Date.now() / 1000)
     },
@@ -30,9 +30,7 @@ async function sendPaymentCapturedWebhook({ chargeId, ghlTransactionId, amount, 
 
   try {
     const res = await axios.post(GHL_WEBHOOK_URL, payload, {
-      headers: {
-        "Content-Type": "application/json"
-      },
+      headers: { "Content-Type": "application/json" },
       timeout: 7000
     });
 
@@ -45,7 +43,6 @@ async function sendPaymentCapturedWebhook({ chargeId, ghlTransactionId, amount, 
     console.error("Status:", err.response?.status);
     console.error("Data:", JSON.stringify(err.response?.data, null, 2));
     console.error("Headers:", JSON.stringify(err.response?.headers, null, 2));
-    console.error("Config:", JSON.stringify(err.config, null, 2));
     throw err;
   }
 }
@@ -54,44 +51,49 @@ export default async function handler(req, res) {
   console.log("📥 [Handler] GHL gọi queryUrl");
   console.log("Method:", req.method);
   console.log("Headers:", JSON.stringify(req.headers, null, 2));
-  console.log("Body:", JSON.stringify(req.body, null, 2));
 
-  if (req.method !== 'POST') {
-    console.warn("⚠️ [Handler] Method không được hỗ trợ:", req.method);
-    return res.status(405).json({ error: 'Method Not Allowed' });
+  if (req.method === 'GET') {
+    console.log("🔍 [Handler] Nhận GET request (GHL health check?)");
+    console.log("Query params:", JSON.stringify(req.query, null, 2));
+    return res.status(200).send("✅ Server OK (GET)");
   }
 
-  const { type, transactionId, chargeId, locationId, amount } = req.body;
+  if (req.method === 'POST') {
+    console.log("📦 [Handler] Body:", JSON.stringify(req.body, null, 2));
 
-  if (type !== 'verify' || !transactionId || !chargeId || !locationId) {
-    console.error("❌ [Handler] Thiếu tham số bắt buộc trong payload:");
-    console.error(JSON.stringify(req.body, null, 2));
-    return res.status(400).json({ error: 'Thiếu tham số verify' });
-  }
+    const { type, transactionId, chargeId, locationId, amount } = req.body;
 
-  try {
-    // 📝 Bước 1: Xác minh giao dịch VNPAY (giả lập)
-    console.log("🔍 [Handler] Đang xác minh giao dịch VNPAY...");
-    const isValidPayment = true; // TODO: Thay bằng call QueryDR thực tế
-
-    if (isValidPayment) {
-      console.log("✅ [Handler] Giao dịch VNPAY hợp lệ. Đang gửi webhook...");
-      await sendPaymentCapturedWebhook({
-        chargeId,
-        ghlTransactionId: transactionId,
-        amount,
-        locationId
-      });
-
-      console.log("📤 [Handler] Trả success về GHL");
-      return res.status(200).json({ success: true });
-    } else {
-      console.warn("⚠️ [Handler] Giao dịch VNPAY không hợp lệ. Trả failed.");
-      return res.status(200).json({ failed: true });
+    if (type !== 'verify' || !transactionId || !chargeId || !locationId) {
+      console.error("❌ [Handler] Thiếu tham số bắt buộc trong payload:");
+      return res.status(400).json({ error: 'Thiếu tham số verify' });
     }
-  } catch (err) {
-    console.error("🔥 [Handler] Lỗi xử lý verify:");
-    console.error(err.stack || err.message);
-    return res.status(500).json({ error: 'Internal Server Error' });
+
+    try {
+      console.log("🔍 [Handler] Đang xác minh giao dịch VNPAY...");
+      const isValidPayment = true; // TODO: Replace bằng VNPAY QueryDR call thực tế
+
+      if (isValidPayment) {
+        console.log("✅ [Handler] Giao dịch VNPAY hợp lệ. Đang gửi webhook...");
+        await sendPaymentCapturedWebhook({
+          chargeId,
+          ghlTransactionId: transactionId,
+          amount,
+          locationId
+        });
+
+        console.log("📤 [Handler] Trả success về GHL");
+        return res.status(200).json({ success: true });
+      } else {
+        console.warn("⚠️ [Handler] Giao dịch VNPAY không hợp lệ. Trả failed.");
+        return res.status(200).json({ failed: true });
+      }
+    } catch (err) {
+      console.error("🔥 [Handler] Lỗi xử lý verify:");
+      console.error(err.stack || err.message);
+      return res.status(500).json({ error: 'Internal Server Error' });
+    }
   }
+
+  console.warn("⚠️ [Handler] Method không hỗ trợ:", req.method);
+  return res.status(405).json({ error: 'Method Not Allowed' });
 }
