@@ -16,7 +16,7 @@ async function sendPaymentCapturedWebhook({ chargeId, ghlTransactionId, amount, 
     ghlTransactionId,
     chargeSnapshot: {
       status: "succeeded",
-      amount: amount || 0,
+      amount: amount || 0, // fallback nếu amount undefined
       chargeId,
       chargedAt: Math.floor(Date.now() / 1000)
     },
@@ -46,35 +46,64 @@ async function sendPaymentCapturedWebhook({ chargeId, ghlTransactionId, amount, 
 }
 
 export default async function handler(req, res) {
-  console.log("📥 [Handler] VNPAY ReturnUrl/IPN gọi backend");
+  console.log("📥 [Handler] GHL hoặc Frontend gọi backend");
   console.log("Method:", req.method);
-  console.log("Query params:", JSON.stringify(req.query, null, 2));
+  console.log("Body:", JSON.stringify(req.body, null, 2));
 
-  const vnp_ResponseCode = req.query.vnp_ResponseCode;
-  const vnp_TransactionNo = req.query.vnp_TransactionNo;
-  const vnp_TxnRef = req.query.vnp_TxnRef;
-
-  if (!vnp_ResponseCode || !vnp_TransactionNo || !vnp_TxnRef) {
-    console.error("❌ Thiếu tham số từ VNPAY");
-    return res.status(400).send("❌ Thiếu tham số từ VNPAY");
+  if (req.method !== 'POST') {
+    console.warn("⚠️ [Handler] Method không hỗ trợ:", req.method);
+    return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  if (vnp_ResponseCode === '00') {
-    console.log("✅ Giao dịch VNPAY thành công. Đang gửi webhook đến GHL...");
+  const { type, transactionId, chargeId, locationId, amount } = req.body;
+
+  // 🆕 Xử lý type: "send_webhook" từ frontend
+  if (type === 'send_webhook') {
+    console.log("📥 [Handler] Nhận yêu cầu send_webhook từ frontend:");
     try {
       await sendPaymentCapturedWebhook({
-        chargeId: vnp_TransactionNo,
-        ghlTransactionId: vnp_TxnRef,
-        amount: 100000, // 🎯 Lấy từ DB hoặc fallback
-        locationId: "adLYHnkHxGxHU7ofn3RN" // 🎯 Lấy từ DB hoặc fallback
+        chargeId,
+        ghlTransactionId: transactionId,
+        amount,
+        locationId
       });
-      return res.status(200).send("✅ Đã gửi webhook GHL");
+      return res.status(200).json({ success: true, message: "✅ Đã gửi webhook đến GHL" });
     } catch (err) {
-      console.error("🔥 Lỗi khi gửi webhook:", err.message);
-      return res.status(500).send("❌ Lỗi khi gửi webhook");
+      console.error("🔥 Lỗi khi gửi webhook từ send_webhook:", err.message);
+      return res.status(500).json({ success: false, error: 'Lỗi khi gửi webhook đến GHL' });
     }
-  } else {
-    console.warn("⚠️ Giao dịch VNPAY thất bại:", vnp_ResponseCode);
-    return res.status(200).send("⚠️ Giao dịch thất bại");
   }
+
+  // 🔄 Xử lý verify từ GHL queryUrl
+  if (type === 'verify') {
+    if (!transactionId || !chargeId || !locationId) {
+      console.error("❌ [Handler] Thiếu tham số verify trong payload:");
+      return res.status(400).json({ error: 'Thiếu tham số verify' });
+    }
+
+    console.log("🔍 [Handler] Đang xác minh giao dịch VNPAY...");
+    const isValidPayment = true; // TODO: Replace với VNPAY QueryDR call
+
+    if (isValidPayment) {
+      console.log("✅ [Handler] Giao dịch VNPAY hợp lệ. Đang gửi webhook...");
+      try {
+        await sendPaymentCapturedWebhook({
+          chargeId,
+          ghlTransactionId: transactionId,
+          amount,
+          locationId
+        });
+        return res.status(200).json({ success: true });
+      } catch (err) {
+        console.error("🔥 Lỗi khi gửi webhook từ verify:", err.message);
+        return res.status(500).json({ error: 'Lỗi khi gửi webhook đến GHL' });
+      }
+    } else {
+      console.warn("⚠️ [Handler] Giao dịch VNPAY không hợp lệ");
+      return res.status(200).json({ failed: true });
+    }
+  }
+
+  console.warn("⚠️ [Handler] Unknown type:", type);
+  return res.status(400).json({ error: 'Unknown type' });
 }
