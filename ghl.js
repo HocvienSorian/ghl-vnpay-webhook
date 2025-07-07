@@ -24,6 +24,7 @@ export async function fetchContactDetails(contactId) {
 
 export async function updateInvoiceInGHL(invoiceId, data) {
   try {
+    console.log('📤 Đang update invoiceId:', invoiceId);
     const res = await axios.put(`${GHL_API_BASE}/invoices/${invoiceId}`, data, {
       headers: GHL_HEADERS
     });
