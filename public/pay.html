@@ -17,6 +17,7 @@
 
 <script>
   let paymentDataReceived = false;
+  let fallbackData = null; // 🆕 để giữ fallback transaction nếu dùng
 
   window.addEventListener("load", () => {
     setTimeout(() => {
@@ -41,6 +42,7 @@
   }
 
   async function initiatePayment(data) {
+    fallbackData = data; // 🆕 lưu để dùng cho webhook
     const ipAddr = await getClientIp();
 
     const payload = {
@@ -79,6 +81,29 @@
             console.log("📥 Nhận thông báo thanh toán từ tab mới:", event.data);
 
             if (event.data.status === "success") {
+              // 🆕 Gọi backend gửi webhook
+              console.log("📥 VNPAY báo thành công, gọi backend gửi webhook");
+
+              fetch("/api/vnpay-handler", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  type: "send_webhook",
+                  transactionId: fallbackData.transactionId,
+                  chargeId: event.data.chargeId,
+                  locationId: fallbackData.locationId,
+                  amount: fallbackData.amount
+                })
+              })
+              .then(res => res.json())
+              .then(result => {
+                console.log("✅ Webhook gửi GHL thành công:", result);
+              })
+              .catch(err => {
+                console.error("❌ Lỗi gửi webhook:", err);
+              });
+
+              // Gửi success về GHL (nếu cần)
               window.parent.postMessage({
                 type: "custom_element_success_response",
                 chargeId: event.data.chargeId
@@ -121,7 +146,7 @@
       console.warn("⏱ Không có dữ liệu từ GHL, gọi fallback...");
       try {
         const res = await fetch("/api/fetch-ghl-transaction");
-        const fallbackData = await res.json();
+        fallbackData = await res.json();
         console.log("📦 Fallback transaction data:", fallbackData);
         await initiatePayment(fallbackData);
       } catch (err) {
