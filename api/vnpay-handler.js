@@ -56,7 +56,28 @@ export default async function handler(req, res) {
   }
 
   const { type, transactionId, chargeId, locationId, amount } = req.body;
+ 
+  // 🆕 Xử lý type: "list_payment_methods"
+  if (type === 'list_payment_methods') {
+    console.log("📥 [Handler] Nhận yêu cầu list_payment_methods từ GHL");
 
+    // Trả về 1 phương thức VNPAY mặc định
+    const paymentMethods = [
+      {
+        id: "vnpay", // ID sẽ được dùng để charge
+        type: "card", // Hoặc "bank_account" nếu muốn
+        title: "VNPAY",
+        subTitle: "One-time Payment",
+        expiry: "", // VNPAY không có expiry
+        customerId: contactId, // Liên kết với Contact trên GHL
+        imageUrl: "https://yourcdn.com/vnpay-logo.png" // URL icon VNPAY
+      }
+    ];
+
+    console.log("✅ [Handler] Trả danh sách payment_methods:", JSON.stringify(paymentMethods, null, 2));
+    return res.status(200).json(paymentMethods);
+  }
+ 
   // 🆕 Xử lý type: "send_webhook" từ frontend
   if (type === 'send_webhook') {
     console.log("📥 [Handler] Nhận yêu cầu send_webhook từ frontend:");
