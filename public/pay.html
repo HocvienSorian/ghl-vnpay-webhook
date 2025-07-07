@@ -17,7 +17,6 @@
 
 <script>
   let paymentDataReceived = false;
-  let fallbackData = null;
 
   window.addEventListener("load", () => {
     setTimeout(() => {
@@ -46,50 +45,23 @@
       vnp_ResponseCode, vnp_TransactionNo, vnp_TxnRef
     });
 
-    document.getElementById("status").innerText = "🔍 Đang xác minh giao dịch với GHL...";
+    document.getElementById("status").innerText = "🔍 Đang xác minh giao dịch...";
 
-    try {
-      if (!fallbackData) {
-        const res = await fetch("/api/fetch-ghl-transaction");
-        fallbackData = await res.json();
-        console.log("📦 Fallback transaction data:", fallbackData);
-      }
-
-      const verifyRes = await fetch("/api/vnpay-handler", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: "verify",
-          chargeId: vnp_TransactionNo,
-          transactionId: fallbackData.transactionId,
-          contactId: fallbackData.contactId,
-          entityId: fallbackData.entityId,
-        })
-      });
-
-      const result = await verifyRes.json();
-      console.log("✅ Kết quả verify:", result);
-
-      if (verifyRes.ok && result.success) {
-        window.parent.postMessage({
-          type: "custom_element_success_response",
-          chargeId: vnp_TransactionNo
-        }, "*");
-        document.getElementById("status").innerText = "🎉 Thanh toán thành công!";
-      } else {
-        window.parent.postMessage({
-          type: "custom_element_error_response",
-          error: { description: "Giao dịch thất bại hoặc chưa xác minh." }
-        }, "*");
-        document.getElementById("status").innerText = "❌ Giao dịch thất bại.";
-      }
-    } catch (err) {
-      console.error("🔥 Lỗi verify:", err);
+    // ✅ Gửi success hoặc error event về GHL
+    if (vnp_ResponseCode === "00") {
+      console.log("✅ Thanh toán thành công tại VNPAY");
+      window.parent.postMessage({
+        type: "custom_element_success_response",
+        chargeId: vnp_TransactionNo
+      }, "*");
+      document.getElementById("status").innerText = "🎉 Thanh toán thành công!";
+    } else {
+      console.warn("❌ Thanh toán thất bại tại VNPAY");
       window.parent.postMessage({
         type: "custom_element_error_response",
-        error: { description: "Lỗi xác minh giao dịch." }
+        error: { description: "Giao dịch thất bại hoặc bị hủy." }
       }, "*");
-      document.getElementById("status").innerText = "❌ Lỗi khi xác minh giao dịch.";
+      document.getElementById("status").innerText = "❌ Giao dịch thất bại.";
     }
   }
 
@@ -166,7 +138,7 @@
       console.warn("⏱ Không có dữ liệu từ GHL, gọi fallback...");
       try {
         const res = await fetch("/api/fetch-ghl-transaction");
-        fallbackData = await res.json();
+        const fallbackData = await res.json();
         console.log("📦 Fallback transaction data:", fallbackData);
         await initiatePayment(fallbackData);
       } catch (err) {
