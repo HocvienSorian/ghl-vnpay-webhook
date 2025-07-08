@@ -45,6 +45,13 @@ async function sendPaymentCapturedWebhook({ chargeId, ghlTransactionId, amount, 
   }
 }
 
+async function createVnpayPaymentUrl({ amount, orderId, orderInfo }) {
+  console.log("🔗 [Handler] Tạo link thanh toán VNPAY...");
+  // TODO: Gọi API VNPAY hoặc logic tạo link của bạn
+  const paymentUrl = `https://sandbox.vnpayment.vn/vpcpay.html?amount=${amount}&orderId=${orderId}`;
+  return paymentUrl;
+}
+
 export default async function handler(req, res) {
   console.log("📥 [Handler] GHL hoặc Frontend gọi backend");
   console.log("Method:", req.method);
@@ -55,29 +62,47 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  const { type, transactionId, chargeId, locationId, amount } = req.body;
- 
+  const { type, transactionId, chargeId, locationId, amount, contactId } = req.body;
+
   // 🆕 Xử lý type: "list_payment_methods"
   if (type === 'list_payment_methods') {
     console.log("📥 [Handler] Nhận yêu cầu list_payment_methods từ GHL");
 
-    // Trả về 1 phương thức VNPAY mặc định
     const paymentMethods = [
       {
-        id: "vnpay", // ID sẽ được dùng để charge
-        type: "custom", // Hoặc "bank_account" nếu muốn
-        title: "VNPAY",
-        subTitle: "One-time Payment",
-        expiry: "", // VNPAY không có expiry
-        customerId: contactId, // Liên kết với Contact trên GHL
-        imageUrl: "https://vnpay-webhook.vercel.app/logo.png" // URL icon VNPAY
+        id: "vnpay",               // ID phương thức, GHL sẽ dùng để charge
+        type: "custom",            // Để GHL coi đây là Custom Provider
+        title: "VNPAY",            // Tên hiển thị trên UI
+        subTitle: "Click để thanh toán", // Mô tả phụ
+        expiry: "",                // VNPAY không cần expiry
+        customerId: contactId,     // Liên kết với Contact trên GHL
+        imageUrl: "https://vnpay-webhook.vercel.app/logo.png" // URL logo VNPAY
       }
     ];
 
     console.log("✅ [Handler] Trả danh sách payment_methods:", JSON.stringify(paymentMethods, null, 2));
     return res.status(200).json(paymentMethods);
   }
- 
+
+  // 🆕 Xử lý type: "charge_payment_method"
+  if (type === 'charge_payment_method') {
+    console.log("📥 [Handler] Nhận yêu cầu charge_payment_method từ GHL:", req.body);
+
+    try {
+      const paymentUrl = await createVnpayPaymentUrl({
+        amount,
+        orderId: transactionId,
+        orderInfo: contactId
+      });
+
+      console.log("✅ [Handler] Trả paymentUrl về GHL:", paymentUrl);
+      return res.status(200).json({ paymentUrl });
+    } catch (err) {
+      console.error("🔥 Lỗi khi tạo paymentUrl:", err.message);
+      return res.status(500).json({ error: 'Lỗi khi tạo paymentUrl' });
+    }
+  }
+
   // 🆕 Xử lý type: "send_webhook" từ frontend
   if (type === 'send_webhook') {
     console.log("📥 [Handler] Nhận yêu cầu send_webhook từ frontend:");
