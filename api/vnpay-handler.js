@@ -66,7 +66,7 @@ export default async function handler(req, res) {
     const paymentMethods = [
       {
         id: "vnpay",
-        type: "custom",
+        type: "card",
         title: "VNPAY",
         subTitle: "Click để thanh toán",
         expiry: "",
@@ -79,20 +79,29 @@ export default async function handler(req, res) {
   }
 
   // 🔥 charge_payment_method
-  if (type === 'charge_payment_method') {
-    console.log("🟠 [vnpay-handler] Handling charge_payment_method");
-    try {
-      const paymentUrl = await createVnpayPaymentUrl({
-        amount,
-        orderId: transactionId,
-        orderInfo: contactId
-      });
-      return res.status(200).json({ paymentUrl });
-    } catch (err) {
-      console.error("🔥 [vnpay-handler] Error creating paymentUrl:", err.message);
-      return res.status(500).json({ error: 'Failed to create paymentUrl' });
-    }
+ if (type === 'charge_payment_method') {
+  try {
+    const paymentUrl = await createVnpayPaymentUrl({
+      amount,
+      orderId: transactionId,
+      orderInfo: contactId
+    });
+
+    return res.status(200).json({
+      success: true,
+      paymentUrl,
+      chargeId: transactionId, // dùng làm GHL chargeId
+      message: "Redirecting to VNPAY"
+    });
+  } catch (err) {
+    console.error("🔥 Error creating paymentUrl:", err.message);
+    return res.status(500).json({
+      success: false,
+      failed: true,
+      message: 'Failed to create paymentUrl'
+    });
   }
+}
 
   // 🔥 send_webhook
   if (type === 'send_webhook') {
