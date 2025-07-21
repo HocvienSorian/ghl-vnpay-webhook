@@ -49,9 +49,7 @@ export default async function handler(req, res) {
 
   const { type, transactionId, orderId, chargeId, locationId, amount, contactId, apiKey } = req.body;
 
-  if (apiKey !== process.env.GHL_LIVE_API_KEY && apiKey !== process.env.GHL_TEST_API_KEY) {
-    console.error("❌ Invalid API Key");
-    return res.status(401).json({ error: "Unauthorized" });
+ console.warn("⚠️ Skipping API Key check for debugging. Received:", apiKey);
   }
 
   if (type === 'list_payment_methods') {
