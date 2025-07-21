@@ -1,161 +1,39 @@
-<!DOCTYPE html>
-<html lang="vi">
-<head>
-  <meta charset="UTF-8" />
-  <title>Cổng Thanh Toán VNPAY</title>
-  <style>
-    body {
-      font-family: sans-serif;
-      text-align: center;
-      padding: 40px;
-    }
-  </style>
-</head>
-<body>
-  <h1>🧾 Cổng Thanh Toán VNPAY</h1>
-  <p id="status">⏳ Đang chờ GHL gửi thông tin thanh toán...</p>
-
 <script>
-  let paymentDataReceived = false;
-  let fallbackData = null; // 🆕 để giữ fallback transaction nếu dùng
-
   window.addEventListener("load", () => {
     setTimeout(() => {
-      console.log("🚀 Iframe loaded – gửi custom_provider_ready");
+      console.log("🚀 Iframe loaded - sending custom_provider_ready");
       window.postMessage({
         type: "custom_provider_ready",
         loaded: true,
-        providerId: "685ca9b987c1777791c22f89",
         addCardOnFileSupported: false
       }, "*");
     }, 300);
   });
 
-  async function getClientIp() {
-    try {
-      const res = await fetch("https://api.ipify.org?format=json");
-      const data = await res.json();
-      return data.ip;
-    } catch (err) {
-      console.warn("⚠️ Không lấy được IP, dùng fallback");
-      return "127.0.0.1";
-    }
-  }
+  window.addEventListener("message", async (event) => {
+    console.log("📥 Received from GHL:", event.data);
+    if (event.data?.type !== "payment_initiate_props") return;
 
-  async function initiatePayment(data) {
-    fallbackData = data; // 🆕 lưu để dùng cho webhook
-    const ipAddr = await getClientIp();
-
-    const payload = {
-      amount: data.amount,
-      orderId: data.orderId || data.transactionId || "ORD_FALLBACK",
-      orderInfo: data.contactId,
-      ipAddr,
-    };
-
-    const missing = Object.entries(payload).filter(([_, v]) => !v).map(([k]) => k);
-    if (missing.length > 0) {
-      console.error("❌ Thiếu trường:", missing);
-      alert(`❌ Thiếu dữ liệu bắt buộc: ${missing.join(', ')}`);
-      return;
-    }
-
-    document.getElementById("status").innerText = "🔄 Đang xử lý giao dịch...";
+    const { amount, orderId, contactId } = event.data;
+    console.log("🔄 Initiating payment:", { amount, orderId, contactId });
 
     try {
       const res = await fetch("/api/create-payment-url", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({ amount, orderInfo: contactId, ipAddr: "127.0.0.1" })
       });
-
       const result = await res.json();
-
       if (result.paymentUrl) {
-        console.log("✅ Mở tab mới tới VNPAY:", result.paymentUrl);
-        const vnpayTab = window.open(result.paymentUrl, "_blank"); // ✅ mở tab mới tránh bị chặn
-        document.getElementById("status").innerText = "✅ Đã mở trang thanh toán.";
-
-        // 🆕 Nghe thông báo từ ReturnUrl (tab mới)
-        window.addEventListener("message", (event) => {
-          if (event.data?.type === "vnpay_payment_complete") {
-            console.log("📥 Nhận thông báo thanh toán từ tab mới:", event.data);
-
-            if (event.data.status === "success") {
-              // 🆕 Gọi backend gửi webhook
-              console.log("📥 VNPAY báo thành công, gọi backend gửi webhook");
-
-              fetch("/api/vnpay-handler", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  type: "send_webhook",
-                  transactionId: fallbackData.transactionId,
-                  chargeId: event.data.chargeId,
-                  locationId: fallbackData.locationId,
-                  amount: fallbackData.amount
-                })
-              })
-              .then(res => res.json())
-              .then(result => {
-                console.log("✅ Webhook gửi GHL thành công:", result);
-              })
-              .catch(err => {
-                console.error("❌ Lỗi gửi webhook:", err);
-              });
-
-              // Gửi success về GHL (nếu cần)
-              window.parent.postMessage({
-                type: "custom_element_success_response",
-                chargeId: event.data.chargeId
-              }, "*");
-              document.getElementById("status").innerText = "🎉 Thanh toán thành công!";
-            } else {
-              window.parent.postMessage({
-                type: "custom_element_error_response",
-                error: { description: "Giao dịch thất bại hoặc bị hủy." }
-              }, "*");
-              document.getElementById("status").innerText = "❌ Giao dịch thất bại.";
-            }
-          }
-        });
-      } else {
-        console.error("❌ Không nhận được paymentUrl:", result);
-        alert("❌ Không thể tạo link thanh toán.");
+        console.log("✅ Redirecting to:", result.paymentUrl);
+        window.open(result.paymentUrl, "_blank");
       }
     } catch (err) {
-      console.error("🔥 Lỗi gửi dữ liệu:", err);
-      alert("❌ Có lỗi xảy ra. Vui lòng thử lại.");
+      console.error("❌ Error initiating payment:", err.message);
+      window.parent.postMessage({
+        type: "custom_element_error_response",
+        error: { description: err.message }
+      }, "*");
     }
-  }
-
-  window.addEventListener("message", async (event) => {
-    const data = event.data;
-    console.log("📥 Nhận dữ liệu từ GHL:", data);
-
-    if (data?.type !== "payment_initiate_props") {
-      console.warn("⚠️ Không phải payment_initiate_props:", data?.type);
-      return;
-    }
-
-    paymentDataReceived = true;
-    await initiatePayment(data);
   });
-
-  setTimeout(async () => {
-    if (!paymentDataReceived) {
-      console.warn("⏱ Không có dữ liệu từ GHL, gọi fallback...");
-      try {
-        const res = await fetch("/api/fetch-ghl-transaction");
-        fallbackData = await res.json();
-        console.log("📦 Fallback transaction data:", fallbackData);
-        await initiatePayment(fallbackData);
-      } catch (err) {
-        console.error("❌ Lỗi fallback:", err);
-        document.getElementById("status").innerText = "❌ Không thể lấy dữ liệu giao dịch.";
-      }
-    }
-  }, 3000);
 </script>
-</body>
-</html>
