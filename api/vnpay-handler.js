@@ -6,7 +6,7 @@ const PRIVATE_PROVIDER_API_KEY = process.env.GHL_PRIVATE_PROVIDER_API_KEY;
 
 async function sendPaymentCapturedWebhook({ chargeId, ghlTransactionId, amount, locationId }) {
   if (!PRIVATE_PROVIDER_API_KEY) {
-    console.error("🚨 [vnpay-handler] PRIVATE_PROVIDER_API_KEY missing. Check .env");
+    console.error("🚨 PRIVATE_PROVIDER_API_KEY missing in .env");
     throw new Error("PRIVATE_PROVIDER_API_KEY missing");
   }
 
@@ -24,63 +24,63 @@ async function sendPaymentCapturedWebhook({ chargeId, ghlTransactionId, amount, 
     apiKey: PRIVATE_PROVIDER_API_KEY
   };
 
-  console.log("📦 [vnpay-handler] Webhook Payload:", JSON.stringify(payload, null, 2));
+  console.log("📦 Webhook Payload:", JSON.stringify(payload, null, 2));
 
-  try {
-    const res = await axios.post(GHL_WEBHOOK_URL, payload, {
-      headers: { "Content-Type": "application/json" },
-      timeout: 7000
-    });
-    console.log("✅ [vnpay-handler] Webhook sent. Status:", res.status, "Data:", JSON.stringify(res.data, null, 2));
-    return res.data;
-  } catch (err) {
-    console.error("❌ [vnpay-handler] Webhook error:", err.response?.status, JSON.stringify(err.response?.data, null, 2));
-    throw err;
-  }
+  const res = await axios.post(GHL_WEBHOOK_URL, payload, {
+    headers: { "Content-Type": "application/json" },
+    timeout: 7000
+  });
+
+  console.log("✅ Webhook sent. Status:", res.status, "Response:", res.data);
+  return res.data;
 }
 
 async function createVnpayPaymentUrl({ amount, orderId, orderInfo }) {
-  console.log("🔗 [vnpay-handler] Creating VNPAY payment URL...");
-  // Mock URL for testing
-  const paymentUrl = `https://sandbox.vnpayment.vn/vpcpay.html?amount=${amount}&orderId=${orderId}`;
-  console.log("✅ [vnpay-handler] Payment URL:", paymentUrl);
+  console.log("🔗 Creating VNPAY payment URL...");
+  // Mock only – replace with your actual payment URL logic
+  const paymentUrl = `https://sandbox.vnpayment.vn/vpcpay.html?amount=${amount}&orderId=${orderId}&info=${orderInfo}`;
   return paymentUrl;
 }
 
 export default async function handler(req, res) {
-  console.log("📥 [vnpay-handler] API called");
+  console.log("📥 API called");
   console.log("➡️ Method:", req.method);
-  console.log("➡️ Headers:", JSON.stringify(req.headers, null, 2));
   console.log("➡️ Body:", JSON.stringify(req.body, null, 2));
 
   if (req.method !== 'POST') {
-    console.warn("⚠️ [vnpay-handler] Unsupported Method:", req.method);
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  const { type, transactionId, chargeId, locationId, amount, contactId } = req.body;
+  const { type, transactionId, chargeId, locationId, amount, contactId, apiKey } = req.body;
 
-  // 🔥 list_payment_methods
+  // 🔹 Xác thực apiKey
+  if (!apiKey || apiKey !== PRIVATE_PROVIDER_API_KEY) {
+    console.warn("❌ Invalid or missing apiKey:", apiKey);
+    return res.status(403).json({ error: 'Invalid API key for custom provider' });
+  }
+
+  // 1️⃣ List Payment Methods
   if (type === 'list_payment_methods') {
-    console.log("🟢 [vnpay-handler] Handling list_payment_methods");
+    console.log("🟢 Handling list_payment_methods");
+
     const paymentMethods = [
       {
         id: "vnpay",
         type: "custom",
         title: "VNPAY",
-        subTitle: "Click để thanh toán",
-        expiry: "",
-        customerId: contactId,
-        imageUrl: "https://vnpay-webhook.vercel.app/logo.png"
+        subTitle: "Thanh toán qua VNPAY",
+        imageUrl: "https://vnpay-webhook.vercel.app/logo.png",
+        customerId: contactId
       }
     ];
-    console.log("✅ [vnpay-handler] Returning payment methods:", JSON.stringify(paymentMethods, null, 2));
+
     return res.status(200).json(paymentMethods);
   }
 
-  // 🔥 charge_payment_method
+  // 2️⃣ Charge Payment
   if (type === 'charge_payment_method') {
-    console.log("🟠 [vnpay-handler] Handling charge_payment_method");
+    console.log("🟠 Handling charge_payment_method");
+
     try {
       const paymentUrl = await createVnpayPaymentUrl({
         amount,
@@ -89,14 +89,15 @@ export default async function handler(req, res) {
       });
       return res.status(200).json({ paymentUrl });
     } catch (err) {
-      console.error("🔥 [vnpay-handler] Error creating paymentUrl:", err.message);
+      console.error("🔥 Failed to create payment URL:", err.message);
       return res.status(500).json({ error: 'Failed to create paymentUrl' });
     }
   }
 
-  // 🔥 send_webhook
+  // 3️⃣ Send Webhook manually (fallback)
   if (type === 'send_webhook') {
-    console.log("📨 [vnpay-handler] Handling send_webhook");
+    console.log("📨 Handling send_webhook");
+
     try {
       await sendPaymentCapturedWebhook({
         chargeId,
@@ -104,22 +105,22 @@ export default async function handler(req, res) {
         amount,
         locationId
       });
-      return res.status(200).json({ success: true, message: "✅ Webhook sent to GHL" });
+      return res.status(200).json({ success: true, message: "Webhook sent to GHL" });
     } catch (err) {
-      console.error("🔥 [vnpay-handler] Error sending webhook:", err.message);
-      return res.status(500).json({ error: 'Failed to send webhook to GHL' });
+      console.error("🔥 Webhook sending failed:", err.message);
+      return res.status(500).json({ error: 'Failed to send webhook' });
     }
   }
 
-  // 🔥 verify
+  // 4️⃣ Verify (used by GHL post-payment)
   if (type === 'verify') {
-    console.log("🔍 [vnpay-handler] Handling verify");
+    console.log("🔍 Handling verify");
+
     if (!transactionId || !chargeId || !locationId) {
-      console.error("❌ [vnpay-handler] Missing verify params");
-      return res.status(400).json({ error: 'Missing verify params' });
+      return res.status(400).json({ error: 'Missing verify parameters' });
     }
 
-    const isValidPayment = true; // Mock validation
+    const isValidPayment = true; // Replace with actual VNPAY query logic
     if (isValidPayment) {
       try {
         await sendPaymentCapturedWebhook({
@@ -130,15 +131,14 @@ export default async function handler(req, res) {
         });
         return res.status(200).json({ success: true });
       } catch (err) {
-        console.error("🔥 [vnpay-handler] Webhook error during verify:", err.message);
-        return res.status(500).json({ error: 'Failed to send webhook during verify' });
+        return res.status(500).json({ error: 'Failed to send webhook in verify' });
       }
     } else {
-      console.warn("⚠️ [vnpay-handler] Invalid payment");
       return res.status(200).json({ failed: true });
     }
   }
 
-  console.warn("⚠️ [vnpay-handler] Unknown type:", type);
-  return res.status(400).json({ error: 'Unknown type' });
+  // ❓ Unknown
+  console.warn("⚠️ Unknown request type:", type);
+  return res.status(400).json({ error: 'Unknown request type' });
 }
