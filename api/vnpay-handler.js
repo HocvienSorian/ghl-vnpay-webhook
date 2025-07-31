@@ -37,7 +37,6 @@ async function sendPaymentCapturedWebhook({ chargeId, ghlTransactionId, amount, 
 
 async function createVnpayPaymentUrl({ amount, orderId, orderInfo }) {
   console.log("🔗 Creating VNPAY payment URL...");
-  // Mock only – replace with your actual payment URL logic
   const paymentUrl = `https://sandbox.vnpayment.vn/vpcpay.html?amount=${amount}&orderId=${orderId}&info=${orderInfo}`;
   return paymentUrl;
 }
@@ -45,7 +44,9 @@ async function createVnpayPaymentUrl({ amount, orderId, orderInfo }) {
 export default async function handler(req, res) {
   console.log("📥 API called");
   console.log("➡️ Method:", req.method);
-  console.log("➡️ Body:", JSON.stringify(req.body, null, 2));
+  console.log("📥 GHL Request:", JSON.stringify(req.body, null, 2));
+  console.log("🔑 apiKey GHL gửi:", req.body.apiKey);
+  console.log("🔑 apiKey .env:", PRIVATE_PROVIDER_API_KEY);
 
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
@@ -53,7 +54,7 @@ export default async function handler(req, res) {
 
   const { type, transactionId, chargeId, locationId, amount, contactId, apiKey } = req.body;
 
-  // 🔹 Xác thực apiKey
+  // ✅ Validate apiKey
   if (!apiKey || apiKey !== PRIVATE_PROVIDER_API_KEY) {
     console.warn("❌ Invalid or missing apiKey:", apiKey);
     return res.status(403).json({ error: 'Invalid API key for custom provider' });
@@ -74,6 +75,7 @@ export default async function handler(req, res) {
       }
     ];
 
+    console.log("✅ Returning payment methods:", JSON.stringify(paymentMethods, null, 2));
     return res.status(200).json(paymentMethods);
   }
 
@@ -94,7 +96,7 @@ export default async function handler(req, res) {
     }
   }
 
-  // 3️⃣ Send Webhook manually (fallback)
+  // 3️⃣ Manual Webhook
   if (type === 'send_webhook') {
     console.log("📨 Handling send_webhook");
 
@@ -112,7 +114,7 @@ export default async function handler(req, res) {
     }
   }
 
-  // 4️⃣ Verify (used by GHL post-payment)
+  // 4️⃣ Verify
   if (type === 'verify') {
     console.log("🔍 Handling verify");
 
@@ -120,7 +122,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Missing verify parameters' });
     }
 
-    const isValidPayment = true; // Replace with actual VNPAY query logic
+    const isValidPayment = true;
     if (isValidPayment) {
       try {
         await sendPaymentCapturedWebhook({
@@ -138,7 +140,6 @@ export default async function handler(req, res) {
     }
   }
 
-  // ❓ Unknown
   console.warn("⚠️ Unknown request type:", type);
   return res.status(400).json({ error: 'Unknown request type' });
 }
